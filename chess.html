@@ -1,0 +1,3429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Chess Premium</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.5);
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            background: #0a0a0f;
+            color: white;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: var(--glass-shadow);
+        }
+
+        /* ============================================================
+           LOBBY SCREEN
+           ============================================================ */
+        #lobby {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            z-index: 900;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+
+        #lobby.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .lobby-title {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .lobby-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 3rem;
+        }
+
+        .lobby-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .lobby-btn {
+            padding: 1rem 3rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 280px;
+        }
+
+        .lobby-btn.primary {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .lobby-btn.secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .lobby-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.5);
+        }
+
+        .lobby-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .lobby-divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 0.5rem 0;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.9rem;
+        }
+
+        .lobby-divider::before,
+        .lobby-divider::after {
+            content: '';
+            width: 60px;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .join-group {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .room-code-input {
+            padding: 1rem 1.5rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            text-align: center;
+            color: white;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            outline: none;
+            width: 200px;
+            transition: border-color 0.3s;
+        }
+
+        .room-code-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 2px;
+            font-weight: 400;
+            font-size: 1rem;
+        }
+
+        .room-code-input:focus {
+            border-color: var(--primary);
+        }
+
+        .lobby-error {
+            color: #fca5a5;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            min-height: 1.2rem;
+        }
+
+        /* ============================================================
+           TUTORIAL SCREEN
+           ============================================================ */
+        #tutorial {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+
+        #tutorial.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .tutorial-title {
+            font-size: 2.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .tutorial-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .instructions-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-bottom: 2rem;
+            max-height: 50vh;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .instruction-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.7rem 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0;
+            transform: translateX(-30px);
+            min-width: 320px;
+        }
+
+        .instruction-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            border-radius: 10px;
+            font-size: 1.2rem;
+        }
+
+        .instruction-text {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .instruction-key {
+            font-weight: 600;
+            color: #6366f1;
+        }
+
+        #start-btn {
+            padding: 1.2rem 4rem;
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.4);
+        }
+
+        #start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 50px rgba(99, 102, 241, 0.6);
+        }
+
+        /* ============================================================
+           TOP BAR
+           ============================================================ */
+        #top-bar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .turn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .turn-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .turn-dot.black {
+            background: #1a1a1a;
+            border: 2px solid #444;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-badge.check {
+            background: rgba(239, 68, 68, 0.3);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            animation: pulse-red 1s infinite;
+        }
+
+        .status-badge.normal {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #86efac;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 20px 5px rgba(239, 68, 68, 0.2); }
+        }
+
+        .top-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.2s ease;
+        }
+
+        .top-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* ============================================================
+           MULTIPLAYER STATUS IN TOP BAR
+           ============================================================ */
+        .mp-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .mp-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: mp-pulse 2s infinite;
+        }
+
+        .mp-status .dot.disconnected {
+            background: #ef4444;
+        }
+
+        @keyframes mp-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .your-color {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .your-color.white {
+            background: rgba(255, 255, 255, 0.15);
+            color: #f5f5dc;
+        }
+
+        .your-color.black {
+            background: rgba(0, 0, 0, 0.3);
+            color: #888;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* ============================================================
+           SIDE PANEL
+           ============================================================ */
+        #side-panel {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            width: 280px;
+            z-index: 100;
+            padding: 20px;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        #side-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #side-panel::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #side-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .panel-section {
+            margin-bottom: 20px;
+        }
+
+        .panel-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 12px;
+        }
+
+        .captured-pieces {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 40px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+
+        .captured-piece {
+            font-size: 1.4rem;
+            opacity: 0.8;
+            animation: captured-appear 0.3s ease;
+        }
+
+        @keyframes captured-appear {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 0.8; }
+        }
+
+        .move-history {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .move-history::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .move-history::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        .move-entry {
+            display: flex;
+            gap: 10px;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .move-number {
+            color: rgba(255, 255, 255, 0.4);
+            min-width: 30px;
+        }
+
+        .move-white, .move-black {
+            flex: 1;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .move-white:hover, .move-black:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* ============================================================
+           BOTTOM STATUS
+           ============================================================ */
+        #bottom-status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        /* ============================================================
+           SETTINGS PANEL
+           ============================================================ */
+        #settings-panel {
+            position: fixed;
+            left: 20px;
+            top: 80px;
+            width: 260px;
+            z-index: 100;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(-20px);
+            transition: all 0.3s ease;
+        }
+
+        #settings-panel.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .setting-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .toggle {
+            width: 44px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.3s;
+        }
+
+        .toggle.active {
+            background: var(--primary);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .toggle.active::after {
+            transform: translateX(20px);
+        }
+
+        .theme-selector {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .theme-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .theme-btn:hover, .theme-btn.active {
+            border-color: white;
+            transform: scale(1.1);
+        }
+
+        .volume-slider {
+            width: 100px;
+            height: 6px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* ============================================================
+           PROMOTION MODAL
+           ============================================================ */
+        #promotion-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #promotion-modal.visible {
+            display: flex;
+        }
+
+        .promotion-content {
+            padding: 30px;
+            text-align: center;
+        }
+
+        .promotion-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        .promotion-pieces {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .promotion-piece {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .promotion-piece:hover {
+            background: rgba(99, 102, 241, 0.3);
+            border-color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        /* ============================================================
+           WIN SCREEN
+           ============================================================ */
+        #win-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 600;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #win-screen.visible {
+            display: flex;
+        }
+
+        .win-content {
+            text-align: center;
+            padding: 50px;
+        }
+
+        .win-title {
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b, #ef4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .win-subtitle {
+            font-size: 1.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 0.5rem;
+        }
+
+        .win-moves {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 2rem;
+        }
+
+        .win-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .win-btn {
+            padding: 14px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .win-btn.primary {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: white;
+        }
+
+        .win-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .win-btn:hover {
+            transform: translateY(-3px);
+        }
+
+        /* Fireworks Canvas */
+        #fireworks {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 601;
+        }
+
+        /* ============================================================
+           MULTIPLAYER MODALS
+           ============================================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 800;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal-content {
+            padding: 40px;
+            text-align: center;
+            min-width: 360px;
+        }
+
+        .modal-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-text {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 1.5rem;
+        }
+
+        .room-code-display {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: 8px;
+            color: #a855f7;
+            padding: 15px 30px;
+            background: rgba(168, 85, 247, 0.1);
+            border: 2px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            font-family: 'Courier New', monospace;
+            user-select: all;
+            cursor: pointer;
+        }
+
+        .room-code-display:hover {
+            background: rgba(168, 85, 247, 0.2);
+        }
+
+        .copy-hint {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 1.5rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .modal-btn {
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .modal-btn.danger {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .copied-toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            padding: 10px 24px;
+            background: #22c55e;
+            color: white;
+            font-weight: 600;
+            border-radius: 10px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        .copied-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .invite-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .invite-btn {
+            padding: 10px 18px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .invite-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            transform: translateY(-2px);
+        }
+
+        .invite-btn.primary {
+            background: rgba(99, 102, 241, 0.3);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .invite-link-box {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin-bottom: 1rem;
+        }
+
+        .invite-link-text {
+            flex: 1;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'Courier New', monospace;
+        }
+
+        .invite-link-copy {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            background: var(--primary);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .invite-link-copy:hover {
+            background: #818cf8;
+        }
+
+        .qr-container {
+            display: flex;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+
+        .qr-container canvas {
+            border-radius: 8px;
+            background: white;
+            padding: 8px;
+        }
+
+        .joining-spinner {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 768px) {
+            #top-bar {
+                padding: 8px 16px;
+                gap: 12px;
+                width: calc(100% - 40px);
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            #side-panel {
+                display: none;
+            }
+
+            #settings-panel {
+                left: 10px;
+                right: 10px;
+                width: auto;
+            }
+
+            .tutorial-title, .lobby-title {
+                font-size: 2rem;
+            }
+
+            .instruction-item {
+                min-width: 280px;
+                padding: 0.8rem 1.2rem;
+            }
+
+            #bottom-status {
+                width: calc(100% - 40px);
+                font-size: 0.9rem;
+            }
+
+            .room-code-display {
+                font-size: 2rem;
+                letter-spacing: 6px;
+            }
+
+            .modal-content {
+                min-width: auto;
+                width: calc(100% - 40px);
+            }
+
+            .join-group {
+                flex-direction: column;
+            }
+        }
+
+        .piece-label {
+            position: absolute;
+            font-size: 2rem;
+            pointer-events: none;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================================
+         LOBBY SCREEN
+         ============================================================ -->
+    <div id="lobby">
+        <h1 class="lobby-title">3D Chess Premium</h1>
+        <p class="lobby-subtitle">Play chess online with friends</p>
+        <div class="lobby-buttons">
+            <button class="lobby-btn primary" id="btn-create-room">Create Room</button>
+            <div class="lobby-divider">or</div>
+            <div class="join-group">
+                <input type="text" class="room-code-input" id="room-code-input" placeholder="Room Code" maxlength="6" autocomplete="off" spellcheck="false">
+                <button class="lobby-btn secondary" id="btn-join-room" style="min-width: auto; padding: 1rem 2rem;">Join</button>
+            </div>
+            <div class="lobby-divider" style="margin-top: 1rem;">or</div>
+            <button class="lobby-btn secondary" id="btn-local-play">Play Locally</button>
+            <div class="lobby-error" id="lobby-error"></div>
+        </div>
+    </div>
+
+    <!-- Tutorial Screen -->
+    <div id="tutorial" class="hidden">
+        <h1 class="tutorial-title">How to Play</h1>
+        <p class="tutorial-subtitle">This game is controlled entirely with your mouse.</p>
+        <div class="instructions-container">
+            <div class="instruction-item">
+                <div class="instruction-icon">🖱</div>
+                <span class="instruction-text"><span class="instruction-key">Left Click</span> → Select Piece</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">📍</div>
+                <span class="instruction-text"><span class="instruction-key">Click Destination</span> → Move Piece</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">🔄</div>
+                <span class="instruction-text"><span class="instruction-key">Drag Mouse</span> → Rotate Camera</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">🔍</div>
+                <span class="instruction-text"><span class="instruction-key">Mouse Wheel</span> → Zoom</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">🎯</div>
+                <span class="instruction-text"><span class="instruction-key">Right Click</span> → Reset Camera</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">🔄</div>
+                <span class="instruction-text"><span class="instruction-key">Press R</span> → Restart Match</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">↩️</div>
+                <span class="instruction-text"><span class="instruction-key">Press U</span> → Undo Move</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">💡</div>
+                <span class="instruction-text"><span class="instruction-key">Press H</span> → Toggle Hints</span>
+            </div>
+            <div class="instruction-item">
+                <div class="instruction-icon">🖥️</div>
+                <span class="instruction-text"><span class="instruction-key">Press F</span> → Fullscreen</span>
+            </div>
+        </div>
+        <button id="start-btn">Start Playing</button>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Bar -->
+    <div id="top-bar" class="glass">
+        <div class="turn-indicator">
+            <div class="turn-dot" id="turn-dot"></div>
+            <span id="turn-text">White's Turn</span>
+        </div>
+        <div class="status-badge normal" id="status-badge">Move 1</div>
+        <div id="mp-status-container"></div>
+        <button class="top-btn" id="undo-btn" title="Undo (U)">↩️</button>
+        <button class="top-btn" id="restart-btn" title="Restart (R)">🔄</button>
+        <button class="top-btn" id="help-btn" title="Help (H)">❓</button>
+        <button class="top-btn" id="settings-btn" title="Settings">⚙️</button>
+        <button class="top-btn" id="fullscreen-btn" title="Fullscreen (F)">⛶</button>
+    </div>
+
+    <!-- Side Panel -->
+    <div id="side-panel" class="glass">
+        <div class="panel-section">
+            <div class="panel-title">Captured by White</div>
+            <div class="captured-pieces" id="captured-white"></div>
+        </div>
+        <div class="panel-section">
+            <div class="panel-title">Captured by Black</div>
+            <div class="captured-pieces" id="captured-black"></div>
+        </div>
+        <div class="panel-section">
+            <div class="panel-title">Move History</div>
+            <div class="move-history" id="move-history"></div>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="glass">
+        <div class="panel-title" style="margin-bottom: 15px;">Settings</div>
+        <div class="setting-item">
+            <span class="setting-label">Shadows</span>
+            <div class="toggle active" id="toggle-shadows" data-setting="shadows"></div>
+        </div>
+        <div class="setting-item">
+            <span class="setting-label">Particles</span>
+            <div class="toggle active" id="toggle-particles" data-setting="particles"></div>
+        </div>
+        <div class="setting-item">
+            <span class="setting-label">Auto Rotate</span>
+            <div class="toggle active" id="toggle-auto-rotate" data-setting="autoRotate"></div>
+        </div>
+        <div class="setting-item">
+            <span class="setting-label">Show Hints</span>
+            <div class="toggle active" id="toggle-hints" data-setting="hints"></div>
+        </div>
+        <div class="setting-item">
+            <span class="setting-label">Sound</span>
+            <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="50">
+        </div>
+        <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+            <span class="setting-label">Board Theme</span>
+            <div class="theme-selector">
+                <div class="theme-btn active" style="background: linear-gradient(135deg, #8B4513, #D2691E);" data-theme="classic"></div>
+                <div class="theme-btn" style="background: linear-gradient(135deg, #3d2914, #5c4033);" data-theme="walnut"></div>
+                <div class="theme-btn" style="background: linear-gradient(135deg, #e8e8e8, #b8b8b8);" data-theme="marble"></div>
+                <div class="theme-btn" style="background: linear-gradient(135deg, #064e3b, #10b981);" data-theme="emerald"></div>
+                <div class="theme-btn" style="background: linear-gradient(135deg, #1e3a5f, #3b82f6);" data-theme="blue"></div>
+                <div class="theme-btn" style="background: linear-gradient(135deg, #1a1a2e, #4a4a6a);" data-theme="midnight"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Status -->
+    <div id="bottom-status" class="glass">White to move</div>
+
+    <!-- Promotion Modal -->
+    <div id="promotion-modal">
+        <div class="promotion-content glass">
+            <div class="promotion-title">Promote Pawn</div>
+            <div class="promotion-pieces" id="promotion-pieces">
+                <div class="promotion-piece" data-piece="q">♕</div>
+                <div class="promotion-piece" data-piece="r">♖</div>
+                <div class="promotion-piece" data-piece="b">♗</div>
+                <div class="promotion-piece" data-piece="n">♘</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win Screen -->
+    <div id="win-screen">
+        <canvas id="fireworks"></canvas>
+        <div class="win-content glass">
+            <div class="win-title" id="win-title">Checkmate!</div>
+            <div class="win-subtitle" id="win-subtitle">White Wins</div>
+            <div class="win-moves" id="win-moves">in 25 moves</div>
+            <div class="win-buttons">
+                <button class="win-btn primary" id="play-again-btn">Play Again</button>
+                <button class="win-btn secondary" id="close-win-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         MULTIPLAYER MODALS
+         ============================================================ -->
+
+    <!-- Waiting for Opponent -->
+    <div class="modal-overlay" id="waiting-modal">
+        <div class="modal-content glass">
+            <div class="spinner"></div>
+            <div class="modal-title">Room Created</div>
+            <div class="modal-text">Share this code or link with your friend</div>
+            <div class="room-code-display" id="waiting-room-code" title="Click to copy">------</div>
+            <div class="invite-link-box">
+                <span class="invite-link-text" id="invite-link-text">---</span>
+                <button class="invite-link-copy" id="btn-copy-invite-link">Copy</button>
+            </div>
+            <div class="qr-container" id="qr-container"></div>
+            <div class="invite-actions">
+                <button class="invite-btn primary" id="btn-copy-code">Copy Code</button>
+                <button class="invite-btn" id="btn-copy-link">Copy Link</button>
+                <button class="invite-btn" id="btn-share-link">Share</button>
+            </div>
+            <button class="modal-btn danger" id="btn-cancel-room">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Joining Room (auto-join from URL) -->
+    <div class="modal-overlay" id="joining-modal">
+        <div class="modal-content glass">
+            <div class="spinner"></div>
+            <div class="modal-title">Joining Room</div>
+            <div class="modal-text" id="joining-text">Connecting to room...</div>
+        </div>
+    </div>
+
+    <!-- Room Not Found -->
+    <div class="modal-overlay" id="not-found-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">🔍</div>
+            <div class="modal-title">Room Not Found</div>
+            <div class="modal-text" id="not-found-text">This room does not exist or has been closed.</div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="btn-not-found-create">Create New Room</button>
+                <button class="modal-btn danger" id="btn-not-found-back">Back to Lobby</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Full -->
+    <div class="modal-overlay" id="room-full-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">🚫</div>
+            <div class="modal-title">Room Full</div>
+            <div class="modal-text">This room already has two players.</div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="btn-room-full-create">Create New Room</button>
+                <button class="modal-btn danger" id="btn-room-full-back">Back to Lobby</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Opponent Disconnected -->
+    <div class="modal-overlay" id="disconnect-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">⚡</div>
+            <div class="modal-title">Opponent Disconnected</div>
+            <div class="modal-text" id="disconnect-text">Waiting for opponent to reconnect...</div>
+            <div class="modal-text" style="font-size: 0.85rem; color: rgba(255,255,255,0.4);">Room closes in <span id="disconnect-timer">2:00</span></div>
+            <button class="modal-btn danger" id="btn-leave-room">Leave Room</button>
+        </div>
+    </div>
+
+    <!-- Room Closed -->
+    <div class="modal-overlay" id="room-closed-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">🚪</div>
+            <div class="modal-title">Room Closed</div>
+            <div class="modal-text" id="room-closed-text">The room has been closed.</div>
+            <button class="modal-btn" id="btn-back-to-lobby">Back to Lobby</button>
+        </div>
+    </div>
+
+    <!-- Copied Toast -->
+    <div class="copied-toast" id="copied-toast">Room code copied!</div>
+
+    <script>
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const CONFIG = {
+        shadows: true,
+        particles: true,
+        autoRotate: true,
+        hints: true,
+        volume: 0.5,
+        theme: 'classic',
+        animationSpeed: 1
+    };
+
+    const THEMES = {
+        classic: { light: 0xE8C49A, dark: 0x8B5A2B },
+        walnut: { light: 0xC4A484, dark: 0x5C4033 },
+        marble: { light: 0xF5F5F5, dark: 0xA0A0A0 },
+        emerald: { light: 0xA7F3D0, dark: 0x064E3B },
+        blue: { light: 0xBFDBFE, dark: 0x1E3A5F },
+        midnight: { light: 0x6B7280, dark: 0x1F2937 }
+    };
+
+    const PIECE_SYMBOLS = {
+        wk: '♔', wq: '♕', wr: '♖', wb: '♗', wn: '♘', wp: '♙',
+        bk: '♚', bq: '♛', br: '♜', bb: '♝', bn: '♞', bp: '♟'
+    };
+
+    // ============================================================
+    // GAME STATE
+    // ============================================================
+    let chess = new Chess();
+    let scene, camera, renderer, controls;
+    let boardGroup, piecesGroup, highlightsGroup, particlesGroup;
+    let raycaster, mouse;
+    let selectedPiece = null;
+    let legalMoves = [];
+    let boardSquares = [];
+    let pieceObjects = {};
+    let moveHistory = [];
+    let capturedWhite = [];
+    let capturedBlack = [];
+    let currentTurn = 'w';
+    let boardRotation = 0;
+    let isAnimating = false;
+    let promotionPending = null;
+    let ambientLight, directionalLight;
+
+    // ============================================================
+    // MULTIPLAYER STATE
+    // ============================================================
+    const Multiplayer = {
+        socket: null,
+        isConnected: false,
+        roomCode: null,
+        myColor: null,        // 'w' or 'b'
+        isMultiplayer: false,
+        gameStarted: false,
+        serverUrl: null,
+        inviteLink: null,
+
+        get isMyTurn() {
+            if (!this.isMultiplayer) return chess.turn() === 'w';
+            return chess.turn() === this.myColor;
+        },
+
+        get canInteract() {
+            if (!this.isMultiplayer) return true;
+            return this.isMyTurn && !isAnimating && this.gameStarted;
+        }
+    };
+
+    let disconnectTimerInterval = null;
+
+    // ============================================================
+    // AUDIO SYSTEM
+    // ============================================================
+    const AudioSystem = {
+        ctx: null,
+        init() {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        },
+        play(type) {
+            if (!this.ctx || CONFIG.volume === 0) return;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            const vol = CONFIG.volume * 0.3;
+            
+            switch(type) {
+                case 'move':
+                    osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(vol * 0.5, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                    break;
+                case 'capture':
+                    osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(150, this.ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(vol * 0.6, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.25);
+                    break;
+                case 'check':
+                    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                    osc.frequency.setValueAtTime(600, this.ctx.currentTime + 0.1);
+                    osc.frequency.setValueAtTime(800, this.ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(vol * 0.4, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.3);
+                    break;
+                case 'victory':
+                    const notes = [523, 659, 784, 1047];
+                    notes.forEach((freq, i) => {
+                        const o = this.ctx.createOscillator();
+                        const g = this.ctx.createGain();
+                        o.connect(g);
+                        g.connect(this.ctx.destination);
+                        o.frequency.setValueAtTime(freq, this.ctx.currentTime + i * 0.15);
+                        g.gain.setValueAtTime(vol * 0.4, this.ctx.currentTime + i * 0.15);
+                        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + i * 0.15 + 0.3);
+                        o.start(this.ctx.currentTime + i * 0.15);
+                        o.stop(this.ctx.currentTime + i * 0.15 + 0.3);
+                    });
+                    return;
+                case 'hover':
+                    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol * 0.1, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.05);
+                    break;
+                case 'click':
+                    osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol * 0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.08);
+                    break;
+            }
+        }
+    };
+
+    // ============================================================
+    // THREE.JS INITIALIZATION
+    // ============================================================
+    function initThree() {
+        const container = document.getElementById('canvas-container');
+        
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0f);
+        scene.fog = new THREE.Fog(0x0a0a0f, 15, 25);
+
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 8, 8);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        container.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.minDistance = 5;
+        controls.maxDistance = 15;
+        controls.maxPolarAngle = Math.PI / 2.2;
+        controls.minPolarAngle = Math.PI / 6;
+        controls.autoRotate = CONFIG.autoRotate;
+        controls.autoRotateSpeed = 0.5;
+
+        ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 50;
+        directionalLight.shadow.camera.left = -10;
+        directionalLight.shadow.camera.right = 10;
+        directionalLight.shadow.camera.top = 10;
+        directionalLight.shadow.camera.bottom = -10;
+        directionalLight.shadow.bias = -0.0001;
+        scene.add(directionalLight);
+
+        const fillLight = new THREE.DirectionalLight(0x6366f1, 0.3);
+        fillLight.position.set(-5, 5, -5);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xfbbf24, 0.2);
+        rimLight.position.set(0, 5, -10);
+        scene.add(rimLight);
+
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+
+        boardGroup = new THREE.Group();
+        piecesGroup = new THREE.Group();
+        highlightsGroup = new THREE.Group();
+        particlesGroup = new THREE.Group();
+        scene.add(boardGroup);
+        scene.add(piecesGroup);
+        scene.add(highlightsGroup);
+        scene.add(particlesGroup);
+
+        const groundGeo = new THREE.PlaneGeometry(30, 30);
+        const groundMat = new THREE.MeshStandardMaterial({ 
+            color: 0x0a0a0f,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.5;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        window.addEventListener('resize', onWindowResize);
+        renderer.domElement.addEventListener('click', onCanvasClick);
+        renderer.domElement.addEventListener('contextmenu', onCanvasRightClick);
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // ============================================================
+    // BOARD CREATION
+    // ============================================================
+    function createBoard() {
+        const theme = THEMES[CONFIG.theme];
+        
+        const baseGeo = new THREE.BoxGeometry(8.4, 0.4, 8.4);
+        const baseMat = new THREE.MeshStandardMaterial({
+            color: theme.dark,
+            roughness: 0.3,
+            metalness: 0.2
+        });
+        const base = new THREE.Mesh(baseGeo, baseMat);
+        base.position.y = -0.3;
+        base.castShadow = true;
+        base.receiveShadow = true;
+        boardGroup.add(base);
+
+        const frameGeo = new THREE.BoxGeometry(8.8, 0.5, 8.8);
+        const frameMat = new THREE.MeshStandardMaterial({
+            color: 0x2d1810,
+            roughness: 0.4,
+            metalness: 0.3
+        });
+        const frame = new THREE.Mesh(frameGeo, frameMat);
+        frame.position.y = -0.35;
+        frame.castShadow = true;
+        frame.receiveShadow = true;
+        boardGroup.add(frame);
+
+        boardSquares = [];
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const isLight = (row + col) % 2 === 0;
+                const squareGeo = new THREE.BoxGeometry(0.95, 0.12, 0.95);
+                const squareMat = new THREE.MeshStandardMaterial({
+                    color: isLight ? theme.light : theme.dark,
+                    roughness: isLight ? 0.4 : 0.3,
+                    metalness: 0.1
+                });
+                const square = new THREE.Mesh(squareGeo, squareMat);
+                square.position.set(col - 3.5, 0.06, row - 3.5);
+                square.receiveShadow = true;
+                square.userData = { row, col, isLight };
+                boardGroup.add(square);
+                boardSquares.push(square);
+            }
+        }
+
+        const files = 'abcdefgh';
+        for (let i = 0; i < 8; i++) {
+            const fileLabel = createTextSprite(files[i], i % 2 === 0 ? theme.dark : theme.light);
+            fileLabel.position.set(i - 3.5, 0.15, 4.2);
+            boardGroup.add(fileLabel);
+
+            const rankLabel = createTextSprite(String(8 - i), i % 2 === 0 ? theme.light : theme.dark);
+            rankLabel.position.set(-4.2, 0.15, i - 3.5);
+            boardGroup.add(rankLabel);
+        }
+    }
+
+    function createTextSprite(text, color) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+        ctx.font = 'bold 40px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 32, 32);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.scale.set(0.3, 0.3, 1);
+        return sprite;
+    }
+
+    // ============================================================
+    // PIECE CREATION
+    // ============================================================
+    function createPiece(type, color, row, col) {
+        const group = new THREE.Group();
+        
+        const material = color === 'w' 
+            ? new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.3, metalness: 0.1 })
+            : new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2, metalness: 0.3 });
+
+        const baseHeight = 0.1;
+        const baseRadius = 0.35;
+
+        const baseGeo = new THREE.CylinderGeometry(baseRadius, baseRadius * 1.1, baseHeight, 32);
+        const baseMesh = new THREE.Mesh(baseGeo, material);
+        baseMesh.position.y = baseHeight / 2;
+        baseMesh.castShadow = true;
+        group.add(baseMesh);
+
+        switch(type) {
+            case 'p': addPawnGeometry(group, material); break;
+            case 'r': addRookGeometry(group, material); break;
+            case 'n': addKnightGeometry(group, material); break;
+            case 'b': addBishopGeometry(group, material); break;
+            case 'q': addQueenGeometry(group, material); break;
+            case 'k': addKingGeometry(group, material); break;
+        }
+
+        group.position.set(col - 3.5, 0, row - 3.5);
+        group.userData = { type, color, row, col };
+        piecesGroup.add(group);
+
+        const key = `${color}${type}_${row}_${col}`;
+        pieceObjects[key] = group;
+        
+        return group;
+    }
+
+    function addPawnGeometry(group, material) {
+        const stemGeo = new THREE.CylinderGeometry(0.12, 0.18, 0.4, 16);
+        const stem = new THREE.Mesh(stemGeo, material);
+        stem.position.y = 0.35;
+        stem.castShadow = true;
+        group.add(stem);
+
+        const headGeo = new THREE.SphereGeometry(0.18, 16, 16);
+        const head = new THREE.Mesh(headGeo, material);
+        head.position.y = 0.65;
+        head.castShadow = true;
+        group.add(head);
+    }
+
+    function addRookGeometry(group, material) {
+        const bodyGeo = new THREE.CylinderGeometry(0.2, 0.28, 0.5, 16);
+        const body = new THREE.Mesh(bodyGeo, material);
+        body.position.y = 0.4;
+        body.castShadow = true;
+        group.add(body);
+
+        const topGeo = new THREE.CylinderGeometry(0.25, 0.22, 0.1, 16);
+        const top = new THREE.Mesh(topGeo, material);
+        top.position.y = 0.7;
+        top.castShadow = true;
+        group.add(top);
+
+        for (let i = 0; i < 4; i++) {
+            const angle = (i / 4) * Math.PI * 2;
+            const battlementGeo = new THREE.BoxGeometry(0.08, 0.12, 0.08);
+            const battlement = new THREE.Mesh(battlementGeo, material);
+            battlement.position.set(Math.cos(angle) * 0.18, 0.81, Math.sin(angle) * 0.18);
+            battlement.castShadow = true;
+            group.add(battlement);
+        }
+    }
+
+    function addKnightGeometry(group, material) {
+        const neckGeo = new THREE.CylinderGeometry(0.12, 0.2, 0.45, 16);
+        const neck = new THREE.Mesh(neckGeo, material);
+        neck.position.y = 0.38;
+        neck.rotation.z = 0.15;
+        neck.castShadow = true;
+        group.add(neck);
+
+        const headGeo = new THREE.BoxGeometry(0.22, 0.25, 0.35);
+        const head = new THREE.Mesh(headGeo, material);
+        head.position.set(0.05, 0.7, 0.05);
+        head.rotation.z = 0.3;
+        head.castShadow = true;
+        group.add(head);
+
+        const snoutGeo = new THREE.BoxGeometry(0.12, 0.1, 0.2);
+        const snout = new THREE.Mesh(snoutGeo, material);
+        snout.position.set(0.12, 0.65, 0.1);
+        snout.castShadow = true;
+        group.add(snout);
+
+        const earGeo = new THREE.ConeGeometry(0.05, 0.12, 8);
+        const ear1 = new THREE.Mesh(earGeo, material);
+        ear1.position.set(-0.02, 0.88, 0);
+        ear1.castShadow = true;
+        group.add(ear1);
+
+        const ear2 = new THREE.Mesh(earGeo, material);
+        ear2.position.set(0.08, 0.86, 0.05);
+        ear2.castShadow = true;
+        group.add(ear2);
+    }
+
+    function addBishopGeometry(group, material) {
+        const bodyGeo = new THREE.CylinderGeometry(0.1, 0.25, 0.5, 16);
+        const body = new THREE.Mesh(bodyGeo, material);
+        body.position.y = 0.4;
+        body.castShadow = true;
+        group.add(body);
+
+        const headGeo = new THREE.SphereGeometry(0.15, 16, 16);
+        const head = new THREE.Mesh(headGeo, material);
+        head.position.y = 0.72;
+        head.castShadow = true;
+        group.add(head);
+
+        const pointGeo = new THREE.ConeGeometry(0.06, 0.15, 8);
+        const point = new THREE.Mesh(pointGeo, material);
+        point.position.y = 0.88;
+        point.castShadow = true;
+        group.add(point);
+
+        const slitGeo = new THREE.BoxGeometry(0.15, 0.02, 0.02);
+        const slitMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const slit = new THREE.Mesh(slitGeo, slitMat);
+        slit.position.set(0, 0.72, 0.12);
+        group.add(slit);
+    }
+
+    function addQueenGeometry(group, material) {
+        const bodyGeo = new THREE.CylinderGeometry(0.12, 0.28, 0.55, 16);
+        const body = new THREE.Mesh(bodyGeo, material);
+        body.position.y = 0.42;
+        body.castShadow = true;
+        group.add(body);
+
+        const crownGeo = new THREE.CylinderGeometry(0.2, 0.15, 0.12, 16);
+        const crown = new THREE.Mesh(crownGeo, material);
+        crown.position.y = 0.75;
+        crown.castShadow = true;
+        group.add(crown);
+
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const pointGeo = new THREE.ConeGeometry(0.03, 0.12, 8);
+            const point = new THREE.Mesh(pointGeo, material);
+            point.position.set(Math.cos(angle) * 0.16, 0.87, Math.sin(angle) * 0.16);
+            point.castShadow = true;
+            group.add(point);
+        }
+
+        const orbGeo = new THREE.SphereGeometry(0.06, 16, 16);
+        const orbMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8 });
+        const orb = new THREE.Mesh(orbGeo, orbMat);
+        orb.position.y = 0.95;
+        orb.castShadow = true;
+        group.add(orb);
+    }
+
+    function addKingGeometry(group, material) {
+        const bodyGeo = new THREE.CylinderGeometry(0.14, 0.3, 0.6, 16);
+        const body = new THREE.Mesh(bodyGeo, material);
+        body.position.y = 0.45;
+        body.castShadow = true;
+        group.add(body);
+
+        const crownGeo = new THREE.CylinderGeometry(0.22, 0.18, 0.1, 16);
+        const crown = new THREE.Mesh(crownGeo, material);
+        crown.position.y = 0.8;
+        crown.castShadow = true;
+        group.add(crown);
+
+        const crossMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8 });
+        const crossVGeo = new THREE.BoxGeometry(0.04, 0.2, 0.04);
+        const crossV = new THREE.Mesh(crossVGeo, crossMat);
+        crossV.position.y = 0.95;
+        crossV.castShadow = true;
+        group.add(crossV);
+
+        const crossHGeo = new THREE.BoxGeometry(0.12, 0.04, 0.04);
+        const crossH = new THREE.Mesh(crossHGeo, crossMat);
+        crossH.position.y = 0.98;
+        crossH.castShadow = true;
+        group.add(crossH);
+    }
+
+    function createAllPieces() {
+        while(piecesGroup.children.length > 0) {
+            piecesGroup.remove(piecesGroup.children[0]);
+        }
+        pieceObjects = {};
+
+        const board = chess.board();
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = board[row][col];
+                if (piece) {
+                    createPiece(piece.type, piece.color, row, col);
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // HIGHLIGHTS
+    // ============================================================
+    function clearHighlights() {
+        while(highlightsGroup.children.length > 0) {
+            highlightsGroup.remove(highlightsGroup.children[0]);
+        }
+    }
+
+    function highlightSquare(row, col, color, opacity = 0.5) {
+        const geo = new THREE.BoxGeometry(0.95, 0.02, 0.95);
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
+        const highlight = new THREE.Mesh(geo, mat);
+        highlight.position.set(col - 3.5, 0.14, row - 3.5);
+        highlightsGroup.add(highlight);
+    }
+
+    function highlightLegalMoves() {
+        clearHighlights();
+        if (!selectedPiece || !CONFIG.hints) return;
+
+        const moves = chess.moves({ square: selectedPiece, verbose: true });
+        moves.forEach(move => {
+            const targetRow = 8 - parseInt(move.to[1]);
+            const targetCol = move.to.charCodeAt(0) - 97;
+            
+            if (move.captured) {
+                highlightSquare(targetRow, targetCol, 0xff4444, 0.5);
+            } else {
+                const geo = new THREE.CircleGeometry(0.15, 32);
+                const mat = new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.7 });
+                const circle = new THREE.Mesh(geo, mat);
+                circle.rotation.x = -Math.PI / 2;
+                circle.position.set(targetCol - 3.5, 0.15, targetRow - 3.5);
+                highlightsGroup.add(circle);
+            }
+        });
+
+        const selRow = 8 - parseInt(selectedPiece[1]);
+        const selCol = selectedPiece.charCodeAt(0) - 97;
+        highlightSquare(selRow, selCol, 0x6366f1, 0.6);
+    }
+
+    function highlightLastMove() {
+        const history = chess.history({ verbose: true });
+        if (history.length === 0) return;
+
+        const lastMove = history[history.length - 1];
+        const fromRow = 8 - parseInt(lastMove.from[1]);
+        const fromCol = lastMove.from.charCodeAt(0) - 97;
+        const toRow = 8 - parseInt(lastMove.to[1]);
+        const toCol = lastMove.to.charCodeAt(0) - 97;
+
+        highlightSquare(fromRow, fromCol, 0xfbbf24, 0.3);
+        highlightSquare(toRow, toCol, 0xfbbf24, 0.3);
+    }
+
+    // ============================================================
+    // MOVE ANIMATION
+    // ============================================================
+    function animateMove(from, to, callback) {
+        if (isAnimating) return;
+        isAnimating = true;
+
+        const fromRow = 8 - parseInt(from[1]);
+        const fromCol = from.charCodeAt(0) - 97;
+        const toRow = 8 - parseInt(to[1]);
+        const toCol = to.charCodeAt(0) - 97;
+
+        const fromKey = findPieceAt(fromRow, fromCol);
+        if (!fromKey) {
+            isAnimating = false;
+            if (callback) callback();
+            return;
+        }
+
+        const piece = pieceObjects[fromKey];
+        if (!piece) {
+            isAnimating = false;
+            if (callback) callback();
+            return;
+        }
+
+        const targetX = toCol - 3.5;
+        const targetZ = toRow - 3.5;
+        const liftHeight = 0.5;
+
+        AudioSystem.play('move');
+
+        gsap.to(piece.position, {
+            y: liftHeight,
+            duration: 0.15 * CONFIG.animationSpeed,
+            ease: "power2.out"
+        });
+
+        gsap.to(piece.position, {
+            x: targetX,
+            z: targetZ,
+            duration: 0.3 * CONFIG.animationSpeed,
+            ease: "power2.inOut",
+            delay: 0.1 * CONFIG.animationSpeed
+        });
+
+        gsap.to(piece.position, {
+            y: 0,
+            duration: 0.15 * CONFIG.animationSpeed,
+            ease: "bounce.out",
+            delay: 0.4 * CONFIG.animationSpeed,
+            onComplete: () => {
+                isAnimating = false;
+                if (callback) callback();
+            }
+        });
+    }
+
+    function animateCapture(row, col) {
+        const key = findPieceAt(row, col);
+        if (!key) return;
+
+        AudioSystem.play('capture');
+
+        const piece = pieceObjects[key];
+        gsap.to(piece.scale, {
+            x: 0, y: 0, z: 0,
+            duration: 0.3 * CONFIG.animationSpeed,
+            ease: "back.in",
+            onComplete: () => {
+                piecesGroup.remove(piece);
+                delete pieceObjects[key];
+            }
+        });
+    }
+
+    function findPieceAt(row, col) {
+        for (const key in pieceObjects) {
+            const piece = pieceObjects[key];
+            const userData = piece.userData;
+            if (userData.row === row && userData.col === col) {
+                return key;
+            }
+        }
+        return null;
+    }
+
+    // ============================================================
+    // GAME LOGIC
+    // ============================================================
+    function handleSquareClick(square) {
+        if (isAnimating) return;
+
+        // Multiplayer: block if not my turn
+        if (Multiplayer.isMultiplayer && !Multiplayer.canInteract) return;
+
+        const piece = chess.get(square);
+        
+        if (!selectedPiece && piece && piece.color === chess.turn()) {
+            // Multiplayer: only allow selecting own color
+            if (Multiplayer.isMultiplayer && piece.color !== Multiplayer.myColor) return;
+
+            selectedPiece = square;
+            highlightLegalMoves();
+            AudioSystem.play('click');
+            return;
+        }
+
+        if (selectedPiece === square) {
+            selectedPiece = null;
+            clearHighlights();
+            return;
+        }
+
+        if (selectedPiece && piece && piece.color === chess.turn()) {
+            if (Multiplayer.isMultiplayer && piece.color !== Multiplayer.myColor) return;
+            selectedPiece = square;
+            highlightLegalMoves();
+            AudioSystem.play('click');
+            return;
+        }
+
+        if (selectedPiece) {
+            const moves = chess.moves({ square: selectedPiece, verbose: true });
+            const targetMove = moves.find(m => m.to === square);
+
+            if (targetMove) {
+                if (targetMove.promotion) {
+                    promotionPending = { from: selectedPiece, to: square };
+                    showPromotionModal(chess.turn());
+                    return;
+                }
+                makeMove(selectedPiece, square);
+            } else {
+                selectedPiece = null;
+                clearHighlights();
+            }
+        }
+    }
+
+    function makeMove(from, to, promotion = null) {
+        // If multiplayer, send to server instead
+        if (Multiplayer.isMultiplayer) {
+            selectedPiece = null;
+            clearHighlights();
+            Multiplayer.sendMove(from, to, promotion);
+            return;
+        }
+
+        // Local move
+        const move = chess.move({ from, to, promotion });
+        if (!move) return;
+
+        moveHistory.push(move);
+        const fromRow = 8 - parseInt(from[1]);
+        const fromCol = from.charCodeAt(0) - 97;
+        const toRow = 8 - parseInt(to[1]);
+        const toCol = to.charCodeAt(0) - 97;
+
+        if (move.captured) {
+            animateCapture(toRow, toCol);
+            if (move.color === 'w') {
+                capturedWhite.push(move.captured);
+            } else {
+                capturedBlack.push(move.captured);
+            }
+        }
+
+        animateMove(from, to, () => {
+            const fromKey = findPieceAt(toRow, toCol) || findPieceAt(fromRow, fromCol);
+            if (fromKey && pieceObjects[fromKey]) {
+                pieceObjects[fromKey].userData.row = toRow;
+                pieceObjects[fromKey].userData.col = toCol;
+            }
+
+            if (move.san.includes('O-O') || move.san.includes('O-O-O')) {
+                updateAllPieces();
+            }
+
+            if (move.promotion) {
+                updateAllPieces();
+            }
+
+            if (CONFIG.autoRotate) {
+                rotateBoard();
+            }
+
+            updateUI();
+            highlightLastMove();
+
+            if (chess.in_checkmate()) {
+                AudioSystem.play('victory');
+                setTimeout(() => showWinScreen(), 500);
+            } else if (chess.in_check()) {
+                AudioSystem.play('check');
+                highlightKingInCheck();
+            } else if (chess.in_stalemate() || chess.in_draw()) {
+                setTimeout(() => showDrawScreen(), 500);
+            }
+
+            selectedPiece = null;
+        });
+    }
+
+    /**
+     * Apply a move received from the server
+     */
+    function applyServerMove(gameState) {
+        const { fen, lastMove, captured, promotion, isCheck, isCheckmate, isStalemate, isDraw } = gameState;
+
+        // If there was a capture, animate it
+        if (captured && lastMove) {
+            const toRow = 8 - parseInt(lastMove.to[1]);
+            const toCol = lastMove.to.charCodeAt(0) - 97;
+            animateCapture(toRow, toCol);
+
+            const capturedColor = chess.turn(); // The color whose turn it WAS (the mover)
+            if (capturedColor === 'w') {
+                capturedWhite.push(captured);
+            } else {
+                capturedBlack.push(captured);
+            }
+        }
+
+        // Animate the piece movement
+        if (lastMove) {
+            animateMove(lastMove.from, lastMove.to, () => {
+                // Sync from FEN
+                chess.load(fen);
+
+                // Update piece positions
+                updateAllPieces();
+
+                if (CONFIG.autoRotate) {
+                    rotateBoard();
+                }
+
+                updateUI();
+                highlightLastMove();
+
+                if (isCheckmate) {
+                    AudioSystem.play('victory');
+                    setTimeout(() => showWinScreen(), 500);
+                } else if (isCheck) {
+                    AudioSystem.play('check');
+                    highlightKingInCheck();
+                } else if (isStalemate || isDraw) {
+                    setTimeout(() => showDrawScreen(), 500);
+                }
+            });
+        } else {
+            chess.load(fen);
+            updateAllPieces();
+            updateUI();
+            highlightLastMove();
+        }
+    }
+
+    function rotateBoard() {
+        boardRotation += Math.PI;
+        gsap.to(boardGroup.rotation, { y: boardRotation, duration: 0.8 * CONFIG.animationSpeed, ease: "power2.inOut" });
+        gsap.to(piecesGroup.rotation, { y: boardRotation, duration: 0.8 * CONFIG.animationSpeed, ease: "power2.inOut" });
+        gsap.to(highlightsGroup.rotation, { y: boardRotation, duration: 0.8 * CONFIG.animationSpeed, ease: "power2.inOut" });
+    }
+
+    function highlightKingInCheck() {
+        const board = chess.board();
+        const turn = chess.turn();
+        
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = board[row][col];
+                if (piece && piece.type === 'k' && piece.color === turn) {
+                    const geo = new THREE.BoxGeometry(0.95, 0.05, 0.95);
+                    const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+                    const highlight = new THREE.Mesh(geo, mat);
+                    highlight.position.set(col - 3.5, 0.13, row - 3.5);
+                    highlight.userData.isCheckHighlight = true;
+                    highlightsGroup.add(highlight);
+
+                    gsap.to(highlight.material, { opacity: 0.8, duration: 0.5, yoyo: true, repeat: 3, ease: "sine.inOut" });
+
+                    const key = findPieceAt(row, col);
+                    if (key && pieceObjects[key]) {
+                        gsap.to(pieceObjects[key].position, { y: 0.15, duration: 0.3, yoyo: true, repeat: 2, ease: "sine.inOut" });
+                    }
+                }
+            }
+        }
+    }
+
+    function updateAllPieces() {
+        while(piecesGroup.children.length > 0) {
+            piecesGroup.remove(piecesGroup.children[0]);
+        }
+        pieceObjects = {};
+        createAllPieces();
+    }
+
+    function updateUI() {
+        const turnDot = document.getElementById('turn-dot');
+        const turnText = document.getElementById('turn-text');
+        if (chess.turn() === 'w') {
+            turnDot.classList.remove('black');
+            turnText.textContent = "White's Turn";
+        } else {
+            turnDot.classList.add('black');
+            turnText.textContent = "Black's Turn";
+        }
+
+        const statusBadge = document.getElementById('status-badge');
+        const moveNum = Math.floor(chess.history().length / 2) + 1;
+        statusBadge.textContent = `Move ${moveNum}`;
+
+        if (chess.in_check()) {
+            statusBadge.className = 'status-badge check';
+            statusBadge.textContent += ' - Check!';
+        } else {
+            statusBadge.className = 'status-badge normal';
+        }
+
+        const bottomStatus = document.getElementById('bottom-status');
+        if (Multiplayer.isMultiplayer) {
+            const myTurn = chess.turn() === Multiplayer.myColor;
+            if (chess.in_checkmate()) {
+                const winner = chess.turn() === 'w' ? 'Black' : 'White';
+                bottomStatus.textContent = `Checkmate! ${winner} wins!`;
+            } else if (chess.in_stalemate()) {
+                bottomStatus.textContent = 'Stalemate! Draw.';
+            } else if (chess.in_draw()) {
+                bottomStatus.textContent = 'Draw!';
+            } else if (chess.in_check()) {
+                bottomStatus.textContent = myTurn ? 'You are in check!' : 'Opponent is in check!';
+            } else {
+                bottomStatus.textContent = myTurn ? 'Your turn' : "Opponent's turn";
+            }
+        } else {
+            if (chess.in_checkmate()) {
+                const winner = chess.turn() === 'w' ? 'Black' : 'White';
+                bottomStatus.textContent = `Checkmate! ${winner} wins!`;
+            } else if (chess.in_stalemate()) {
+                bottomStatus.textContent = 'Stalemate! Draw.';
+            } else if (chess.in_draw()) {
+                bottomStatus.textContent = 'Draw!';
+            } else if (chess.in_check()) {
+                const player = chess.turn() === 'w' ? 'White' : 'Black';
+                bottomStatus.textContent = `${player} is in check!`;
+            } else {
+                const player = chess.turn() === 'w' ? 'White' : 'Black';
+                bottomStatus.textContent = `${player} to move`;
+            }
+        }
+
+        updateCapturedPieces();
+        updateMoveHistory();
+    }
+
+    function updateCapturedPieces() {
+        const pieceValues = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' };
+        
+        const whiteContainer = document.getElementById('captured-white');
+        const blackContainer = document.getElementById('captured-black');
+        
+        whiteContainer.innerHTML = capturedWhite.map(p => 
+            `<span class="captured-piece">${pieceValues[p] || ''}</span>`
+        ).join('');
+        
+        blackContainer.innerHTML = capturedBlack.map(p => 
+            `<span class="captured-piece" style="filter: brightness(0.3);">${pieceValues[p] || ''}</span>`
+        ).join('');
+    }
+
+    function updateMoveHistory() {
+        const historyDiv = document.getElementById('move-history');
+        let html = '';
+        
+        for (let i = 0; i < moveHistory.length; i += 2) {
+            const moveNum = Math.floor(i / 2) + 1;
+            const white = moveHistory[i] ? moveHistory[i].san : '';
+            const black = moveHistory[i + 1] ? moveHistory[i + 1].san : '';
+            
+            html += `<div class="move-entry">
+                <span class="move-number">${moveNum}.</span>
+                <span class="move-white">${white}</span>
+                <span class="move-black">${black}</span>
+            </div>`;
+        }
+        
+        historyDiv.innerHTML = html;
+        historyDiv.scrollTop = historyDiv.scrollHeight;
+    }
+
+    // ============================================================
+    // PROMOTION
+    // ============================================================
+    function showPromotionModal(color) {
+        const modal = document.getElementById('promotion-modal');
+        const pieces = document.querySelectorAll('.promotion-piece');
+        
+        pieces.forEach(piece => {
+            if (color === 'w') {
+                piece.style.filter = 'none';
+            } else {
+                piece.style.filter = 'brightness(0.2)';
+            }
+        });
+        
+        modal.classList.add('visible');
+    }
+
+    function hidePromotionModal() {
+        document.getElementById('promotion-modal').classList.remove('visible');
+        promotionPending = null;
+    }
+
+    // ============================================================
+    // WIN/DRAW SCREENS
+    // ============================================================
+    function showWinScreen() {
+        const winScreen = document.getElementById('win-screen');
+        const winTitle = document.getElementById('win-title');
+        const winSubtitle = document.getElementById('win-subtitle');
+        const winMoves = document.getElementById('win-moves');
+        
+        const winner = chess.turn() === 'w' ? 'Black' : 'White';
+        winTitle.textContent = 'Checkmate!';
+
+        if (Multiplayer.isMultiplayer) {
+            const iWon = (chess.turn() === 'w' && Multiplayer.myColor === 'b') || 
+                         (chess.turn() === 'b' && Multiplayer.myColor === 'w');
+            winSubtitle.textContent = iWon ? 'You Win!' : 'You Lose!';
+        } else {
+            winSubtitle.textContent = `${winner} Wins!`;
+        }
+        winMoves.textContent = `in ${Math.ceil(moveHistory.length / 2)} moves`;
+        
+        winScreen.classList.add('visible');
+        
+        if (CONFIG.particles) {
+            startFireworks();
+        }
+    }
+
+    function showDrawScreen() {
+        const winScreen = document.getElementById('win-screen');
+        const winTitle = document.getElementById('win-title');
+        const winSubtitle = document.getElementById('win-subtitle');
+        
+        winTitle.textContent = 'Draw!';
+        if (chess.in_stalemate()) {
+            winSubtitle.textContent = 'Stalemate';
+        } else {
+            winSubtitle.textContent = 'Game Drawn';
+        }
+        
+        winScreen.classList.add('visible');
+    }
+
+    function hideWinScreen() {
+        document.getElementById('win-screen').classList.remove('visible');
+        stopFireworks();
+    }
+
+    // ============================================================
+    // FIREWORKS
+    // ============================================================
+    let fireworksCanvas, fireworksCtx;
+    let fireworks = [];
+    let fireworksInterval;
+
+    function startFireworks() {
+        fireworksCanvas = document.getElementById('fireworks');
+        fireworksCtx = fireworksCanvas.getContext('2d');
+        fireworksCanvas.width = window.innerWidth;
+        fireworksCanvas.height = window.innerHeight;
+
+        fireworks = [];
+        fireworksInterval = setInterval(() => {
+            fireworks.push(createFirework());
+        }, 200);
+
+        animateFireworks();
+    }
+
+    function stopFireworks() {
+        if (fireworksInterval) clearInterval(fireworksInterval);
+        fireworks = [];
+        if (fireworksCtx) fireworksCtx.clearRect(0, 0, fireworksCanvas.width, fireworksCanvas.height);
+    }
+
+    function createFirework() {
+        const x = Math.random() * fireworksCanvas.width;
+        const y = fireworksCanvas.height;
+        const targetY = Math.random() * fireworksCanvas.height * 0.5;
+        const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+        return { x, y, targetY, color, particles: [], exploded: false, speed: 3 + Math.random() * 3 };
+    }
+
+    function animateFireworks() {
+        if (!fireworksCanvas) return;
+        
+        fireworksCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        fireworksCtx.fillRect(0, 0, fireworksCanvas.width, fireworksCanvas.height);
+
+        fireworks = fireworks.filter(fw => {
+            if (!fw.exploded) {
+                fw.y -= fw.speed;
+                fw.x += (Math.random() - 0.5) * 0.5;
+                
+                fireworksCtx.beginPath();
+                fireworksCtx.arc(fw.x, fw.y, 3, 0, Math.PI * 2);
+                fireworksCtx.fillStyle = fw.color;
+                fireworksCtx.fill();
+
+                if (fw.y <= fw.targetY) {
+                    fw.exploded = true;
+                    for (let i = 0; i < 50; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = Math.random() * 5 + 2;
+                        fw.particles.push({
+                            x: fw.x, y: fw.y,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            life: 1, color: fw.color
+                        });
+                    }
+                }
+                return true;
+            }
+
+            fw.particles = fw.particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.1;
+                p.life -= 0.02;
+
+                fireworksCtx.beginPath();
+                fireworksCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                fireworksCtx.fillStyle = p.color;
+                fireworksCtx.globalAlpha = p.life;
+                fireworksCtx.fill();
+                fireworksCtx.globalAlpha = 1;
+
+                return p.life > 0;
+            });
+
+            return fw.particles.length > 0;
+        });
+
+        requestAnimationFrame(animateFireworks);
+    }
+
+    // ============================================================
+    // EVENT HANDLERS
+    // ============================================================
+    function onCanvasClick(event) {
+        if (isAnimating) return;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(boardSquares);
+
+        if (intersects.length > 0) {
+            const square = intersects[0].object.userData;
+            const file = String.fromCharCode(97 + square.col);
+            const rank = 8 - square.row;
+            const algebraic = file + rank;
+            
+            handleSquareClick(algebraic);
+        }
+    }
+
+    function onCanvasRightClick(event) {
+        event.preventDefault();
+        resetCamera();
+    }
+
+    function resetCamera() {
+        gsap.to(camera.position, { x: 0, y: 8, z: 8, duration: 0.8, ease: "power2.inOut" });
+        controls.target.set(0, 0, 0);
+    }
+
+    function undoMove() {
+        if (Multiplayer.isMultiplayer) return; // Undo disabled in multiplayer
+        if (moveHistory.length === 0 || isAnimating) return;
+        
+        const move = chess.undo();
+        if (move) {
+            moveHistory.pop();
+            if (move.captured) {
+                if (move.color === 'w') {
+                    capturedBlack.pop();
+                } else {
+                    capturedWhite.pop();
+                }
+            }
+            updateAllPieces();
+            updateUI();
+            highlightLastMove();
+            AudioSystem.play('click');
+        }
+    }
+
+    function restartGame() {
+        if (Multiplayer.isMultiplayer) return; // Restart disabled in multiplayer
+        
+        chess = new Chess();
+        moveHistory = [];
+        capturedWhite = [];
+        capturedBlack = [];
+        selectedPiece = null;
+        boardRotation = 0;
+        
+        boardGroup.rotation.y = 0;
+        piecesGroup.rotation.y = 0;
+        highlightsGroup.rotation.y = 0;
+        
+        updateAllPieces();
+        clearHighlights();
+        updateUI();
+        AudioSystem.play('click');
+    }
+
+    // ============================================================
+    // TUTORIAL ANIMATION
+    // ============================================================
+    function animateTutorial() {
+        const title = document.querySelector('.tutorial-title');
+        const subtitle = document.querySelector('.tutorial-subtitle');
+        const instructions = document.querySelectorAll('.instruction-item');
+        const startBtn = document.getElementById('start-btn');
+
+        gsap.to(title, { opacity: 1, y: 0, duration: 0.8, delay: 0.3 });
+        gsap.to(subtitle, { opacity: 1, y: 0, duration: 0.8, delay: 0.6 });
+
+        instructions.forEach((item, index) => {
+            gsap.to(item, { opacity: 1, x: 0, duration: 0.5, delay: 1 + index * 0.15 });
+        });
+
+        gsap.to(startBtn, {
+            opacity: 1, scale: 1, duration: 0.5,
+            delay: 1 + instructions.length * 0.15 + 0.3
+        });
+    }
+
+    function hideTutorial() {
+        document.getElementById('tutorial').classList.add('hidden');
+        AudioSystem.play('click');
+    }
+
+    // ============================================================
+    // SETTINGS
+    // ============================================================
+    function initSettings() {
+        document.querySelectorAll('.toggle').forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const setting = this.dataset.setting;
+                CONFIG[setting] = this.classList.contains('active');
+                
+                if (setting === 'autoRotate') controls.autoRotate = CONFIG.autoRotate;
+                if (setting === 'hints') {
+                    if (!CONFIG.hints) clearHighlights();
+                    else if (selectedPiece) highlightLegalMoves();
+                }
+                if (setting === 'shadows') renderer.shadowMap.enabled = CONFIG.shadows;
+                if (setting === 'particles') particlesGroup.visible = CONFIG.particles;
+                
+                AudioSystem.play('click');
+            });
+        });
+
+        document.getElementById('volume-slider').addEventListener('input', function() {
+            CONFIG.volume = this.value / 100;
+        });
+
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                CONFIG.theme = this.dataset.theme;
+                
+                const theme = THEMES[CONFIG.theme];
+                boardSquares.forEach(square => {
+                    const isLight = square.userData.isLight;
+                    square.material.color.setHex(isLight ? theme.light : theme.dark);
+                });
+                
+                AudioSystem.play('click');
+            });
+        });
+    }
+
+    // ============================================================
+    // KEYBOARD SHORTCUTS
+    // ============================================================
+    function initKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('tutorial').classList.contains('hidden') === false) return;
+            if (document.getElementById('lobby').classList.contains('hidden') === false) return;
+            
+            switch(e.key.toLowerCase()) {
+                case 'r':
+                    restartGame();
+                    break;
+                case 'u':
+                    undoMove();
+                    break;
+                case 'h':
+                    CONFIG.hints = !CONFIG.hints;
+                    document.getElementById('toggle-hints').classList.toggle('active', CONFIG.hints);
+                    if (!CONFIG.hints) clearHighlights();
+                    else if (selectedPiece) highlightLegalMoves();
+                    break;
+                case 'f':
+                    if (document.fullscreenElement) document.exitFullscreen();
+                    else document.documentElement.requestFullscreen();
+                    break;
+                case 'escape':
+                    hidePromotionModal();
+                    hideWinScreen();
+                    document.getElementById('settings-panel').classList.remove('visible');
+                    break;
+            }
+        });
+    }
+
+    // ============================================================
+    // AMBIENT PARTICLES
+    // ============================================================
+    function createAmbientParticles() {
+        const particleCount = 100;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 1] = Math.random() * 10;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0x6366f1,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.6
+        });
+
+        particlesGroup.add(new THREE.Points(geometry, material));
+    }
+
+    function animateParticles() {
+        if (!CONFIG.particles) return;
+        particlesGroup.children.forEach(particles => {
+            if (particles.isPoints) {
+                const positions = particles.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i + 1] += 0.002;
+                    if (positions[i + 1] > 10) positions[i + 1] = 0;
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+            }
+        });
+    }
+
+    // ============================================================
+    // RENDER LOOP
+    // ============================================================
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        animateParticles();
+        renderer.render(scene, camera);
+    }
+
+    // ============================================================
+    // MULTIPLAYER NETWORKING
+    // ============================================================
+
+    /**
+     * Detect the server URL automatically.
+     */
+    function detectServerUrl() {
+        if (window.location.port && window.location.port !== '') {
+            return window.location.origin;
+        }
+        return 'http://localhost:3000';
+    }
+
+    /**
+     * Read ?room=XXXXXX from the current URL
+     */
+    function getRoomCodeFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('room');
+    }
+
+    /**
+     * Update the browser URL without reload
+     */
+    function setRoomInUrl(code) {
+        if (code) {
+            const url = new URL(window.location);
+            url.searchParams.set('room', code);
+            window.history.pushState({}, '', url);
+        } else {
+            window.history.pushState({}, '', window.location.pathname);
+        }
+    }
+
+    /**
+     * Generate a QR code using a simple canvas-based generator
+     */
+    function generateQR(text, container, size) {
+        size = size || 120;
+        container.innerHTML = '';
+
+        // Use a lightweight QR API (no dependencies)
+        const canvas = document.createElement('canvas');
+        const qrSize = size;
+        canvas.width = qrSize;
+        canvas.height = qrSize;
+        const ctx = canvas.getContext('2d');
+
+        // Use the free QR server API as an image
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=1a1a2e&margin=8`;
+        img.style.borderRadius = '8px';
+        img.style.background = 'white';
+        img.style.padding = '4px';
+        img.alt = 'QR Code';
+        img.onerror = () => {
+            // Silently fail if QR service unavailable
+            img.style.display = 'none';
+        };
+        container.appendChild(img);
+    }
+
+    /**
+     * Connect to the multiplayer server.
+     * @param {function} onConnected - callback when connected
+     */
+    Multiplayer.connect = function(onConnected) {
+        if (this.socket && this.isConnected) {
+            if (onConnected) onConnected();
+            return;
+        }
+
+        this.serverUrl = this.serverUrl || detectServerUrl();
+
+        try {
+            this.socket = io(this.serverUrl, {
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 1000,
+                timeout: 10000,
+            });
+        } catch (err) {
+            console.error('[Network] Connection failed:', err);
+            showLobbyError('Cannot connect to server');
+            return;
+        }
+
+        this.socket.on('connect', () => {
+            console.log('[Network] Connected:', this.socket.id);
+            this.isConnected = true;
+            updateMpStatus(true);
+            if (onConnected) {
+                onConnected();
+                onConnected = null; // only fire once
+            }
+        });
+
+        this.socket.on('disconnect', () => {
+            console.log('[Network] Disconnected');
+            this.isConnected = false;
+            updateMpStatus(false);
+        });
+
+        this.socket.on('connect_error', (err) => {
+            console.error('[Network] Connection error:', err.message);
+        });
+
+        // Room created
+        this.socket.on('playerJoined', (data) => {
+            console.log('[Network] Player joined:', data);
+            hideWaitingModal();
+        });
+
+        // Waiting (solo in room)
+        this.socket.on('waiting', (data) => {
+            console.log('[Network] Waiting:', data.message);
+        });
+
+        // Game started
+        this.socket.on('gameStart', (data) => {
+            console.log('[Network] Game started:', data);
+            this.gameStarted = true;
+            hideAllMpModals();
+            updateUI();
+        });
+
+        // Move accepted by server
+        this.socket.on('moveAccepted', (gameState) => {
+            console.log('[Network] Move accepted:', gameState.san);
+            moveHistory.push({ san: gameState.san });
+            applyServerMove(gameState);
+        });
+
+        // Move rejected
+        this.socket.on('moveRejected', (data) => {
+            console.warn('[Network] Move rejected:', data.error);
+            this.requestSync();
+        });
+
+        // Full game state sync
+        this.socket.on('gameState', (state) => {
+            console.log('[Network] Full state sync');
+            this.applyFullState(state);
+        });
+
+        // Opponent disconnected
+        this.socket.on('playerDisconnected', (data) => {
+            console.log('[Network] Opponent disconnected');
+            showDisconnectModal(data.message);
+        });
+
+        // Opponent reconnected
+        this.socket.on('playerReconnected', (data) => {
+            console.log('[Network] Opponent reconnected');
+            hideDisconnectModal();
+            this.requestSync();
+        });
+
+        // Game over
+        this.socket.on('gameOver', (data) => {
+            console.log('[Network] Game over:', data);
+            this.gameOver = true;
+        });
+
+        // Room closed
+        this.socket.on('roomClosed', (data) => {
+            console.log('[Network] Room closed:', data.reason);
+            hideAllMpModals();
+            showRoomClosedModal(data.reason);
+            setRoomInUrl(null);
+            this.reset();
+        });
+    };
+
+    /**
+     * Create a new room
+     */
+    Multiplayer.createRoom = function() {
+        if (!this.socket || !this.isConnected) {
+            showLobbyError('Not connected to server');
+            return;
+        }
+
+        this.socket.emit('createRoom', (response) => {
+            if (response.success) {
+                this.roomCode = response.code;
+                this.myColor = response.color;
+                this.isMultiplayer = true;
+                this.inviteLink = response.inviteLink;
+                setRoomInUrl(response.code);
+                showWaitingModal(response.code, response.inviteLink);
+                console.log('[Network] Room created:', response.code);
+            } else {
+                showLobbyError(response.error || 'Failed to create room');
+            }
+        });
+    };
+
+    /**
+     * Join an existing room
+     * @param {string} code - room code
+     * @param {object} options - { fromUrl: bool, silent: bool }
+     */
+    Multiplayer.joinRoom = function(code, options) {
+        options = options || {};
+        if (!this.socket || !this.isConnected) {
+            if (!options.silent) showLobbyError('Not connected to server');
+            return;
+        }
+
+        if (options.fromUrl) {
+            showJoiningModal(code);
+        }
+
+        this.socket.emit('joinRoom', { code: code.toUpperCase() }, (response) => {
+            hideJoiningModal();
+
+            if (response.success) {
+                this.roomCode = response.code;
+                this.myColor = response.color;
+                this.isMultiplayer = true;
+                this.inviteLink = response.inviteLink;
+                setRoomInUrl(response.code);
+                hideLobby();
+                hideNotFoundModal();
+                hideRoomFullModal();
+                console.log('[Network] Joined room:', response.code, 'as', response.color);
+            } else {
+                if (options.fromUrl) {
+                    // Show appropriate error modal
+                    if (response.error === 'Room not found') {
+                        showNotFoundModal(response.error);
+                    } else if (response.error === 'Room is full' || response.error === 'Game is already over') {
+                        showRoomFullModal(response.error);
+                    } else {
+                        showNotFoundModal(response.error);
+                    }
+                } else {
+                    showLobbyError(response.error || 'Failed to join room');
+                }
+            }
+        });
+    };
+
+    /**
+     * Send a move to the server
+     */
+    Multiplayer.sendMove = function(from, to, promotion) {
+        if (!this.socket || !this.isConnected) return;
+
+        const payload = { from, to };
+        if (promotion) payload.promotion = promotion;
+
+        this.socket.emit('move', payload, (response) => {
+            if (!response.success) {
+                console.warn('[Network] Move failed:', response.error);
+                this.requestSync();
+            }
+        });
+    };
+
+    /**
+     * Request a full game state sync from the server
+     */
+    Multiplayer.requestSync = function() {
+        if (!this.socket || !this.isConnected) return;
+
+        this.socket.emit('requestGameState', (response) => {
+            if (response.success) {
+                this.applyFullState(response.state);
+            }
+        });
+    };
+
+    /**
+     * Apply a full game state from server (for reconnect / sync)
+     */
+    Multiplayer.applyFullState = function(state) {
+        chess.load(state.fen);
+        moveHistory = state.moveHistory || [];
+        capturedWhite = [];
+        capturedBlack = [];
+
+        moveHistory.forEach(m => {
+            if (m.captured) {
+                if (m.color === 'w') capturedWhite.push(m.captured);
+                else capturedBlack.push(m.captured);
+            }
+        });
+
+        this.gameStarted = true;
+        this.gameOver = state.gameOver || false;
+
+        boardRotation = 0;
+        boardGroup.rotation.y = 0;
+        piecesGroup.rotation.y = 0;
+        highlightsGroup.rotation.y = 0;
+
+        updateAllPieces();
+        clearHighlights();
+        highlightLastMove();
+        updateUI();
+    };
+
+    /**
+     * Reset multiplayer state
+     */
+    Multiplayer.reset = function() {
+        this.isMultiplayer = false;
+        this.roomCode = null;
+        this.myColor = null;
+        this.gameStarted = false;
+        this.gameOver = false;
+        this.inviteLink = null;
+        hideDisconnectModal();
+        updateMpStatus(false);
+    };
+
+    /**
+     * Leave the current room
+     */
+    Multiplayer.leaveRoom = function() {
+        if (this.socket) {
+            this.socket.disconnect();
+            this.socket.connect();
+        }
+        setRoomInUrl(null);
+        this.reset();
+    };
+
+    // ============================================================
+    // MULTIPLAYER UI HELPERS
+    // ============================================================
+    function showLobbyError(msg) {
+        const el = document.getElementById('lobby-error');
+        el.textContent = msg;
+        setTimeout(() => { el.textContent = ''; }, 4000);
+    }
+
+    function hideLobby() {
+        document.getElementById('lobby').classList.add('hidden');
+    }
+
+    function showLobby() {
+        document.getElementById('lobby').classList.remove('hidden');
+    }
+
+    function showWaitingModal(code, inviteLink) {
+        document.getElementById('waiting-room-code').textContent = code;
+
+        // Set invite link
+        const linkText = inviteLink || (window.location.origin + '/chess.html?room=' + code);
+        document.getElementById('invite-link-text').textContent = linkText;
+
+        // Generate QR code
+        generateQR(linkText, document.getElementById('qr-container'), 130);
+
+        document.getElementById('waiting-modal').classList.add('visible');
+    }
+
+    function hideWaitingModal() {
+        document.getElementById('waiting-modal').classList.remove('visible');
+        hideLobby();
+    }
+
+    function showJoiningModal(code) {
+        document.getElementById('joining-text').textContent = `Connecting to room ${code}...`;
+        document.getElementById('joining-modal').classList.add('visible');
+    }
+
+    function hideJoiningModal() {
+        document.getElementById('joining-modal').classList.remove('visible');
+    }
+
+    function showNotFoundModal(errorMsg) {
+        document.getElementById('not-found-text').textContent = errorMsg || 'This room does not exist or has been closed.';
+        document.getElementById('not-found-modal').classList.add('visible');
+    }
+
+    function hideNotFoundModal() {
+        document.getElementById('not-found-modal').classList.remove('visible');
+    }
+
+    function showRoomFullModal(errorMsg) {
+        document.getElementById('room-full-modal').classList.add('visible');
+    }
+
+    function hideRoomFullModal() {
+        document.getElementById('room-full-modal').classList.remove('visible');
+    }
+
+    function showDisconnectModal(message) {
+        document.getElementById('disconnect-text').textContent = message || 'Opponent disconnected. Waiting...';
+        document.getElementById('disconnect-modal').classList.add('visible');
+        document.getElementById('disconnect-timer').textContent = '2:00';
+
+        let remaining = 120;
+        clearInterval(disconnectTimerInterval);
+        disconnectTimerInterval = setInterval(() => {
+            remaining--;
+            const mins = Math.floor(remaining / 60);
+            const secs = remaining % 60;
+            document.getElementById('disconnect-timer').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            if (remaining <= 0) {
+                clearInterval(disconnectTimerInterval);
+            }
+        }, 1000);
+    }
+
+    function hideDisconnectModal() {
+        document.getElementById('disconnect-modal').classList.remove('visible');
+        clearInterval(disconnectTimerInterval);
+    }
+
+    function showRoomClosedModal(reason) {
+        document.getElementById('room-closed-text').textContent = reason || 'The room has been closed.';
+        document.getElementById('room-closed-modal').classList.add('visible');
+    }
+
+    function hideAllMpModals() {
+        hideWaitingModal();
+        hideDisconnectModal();
+        hideJoiningModal();
+        hideNotFoundModal();
+        hideRoomFullModal();
+        document.getElementById('room-closed-modal').classList.remove('visible');
+    }
+
+    function updateMpStatus(connected) {
+        const container = document.getElementById('mp-status-container');
+
+        if (!Multiplayer.isMultiplayer) {
+            container.innerHTML = '';
+            return;
+        }
+
+        if (Multiplayer.myColor) {
+            const colorLabel = Multiplayer.myColor === 'w' ? 'White' : 'Black';
+            const colorClass = Multiplayer.myColor === 'w' ? 'white' : 'black';
+            container.innerHTML = `
+                <span class="your-color ${colorClass}">You: ${colorLabel}</span>
+                <span class="mp-status">
+                    <span class="dot ${connected ? '' : 'disconnected'}"></span>
+                    ${Multiplayer.roomCode}
+                </span>
+            `;
+        }
+    }
+
+    function copyToClipboard(text, toastMsg) {
+        navigator.clipboard.writeText(text).then(() => {
+            const toast = document.getElementById('copied-toast');
+            toast.textContent = toastMsg || 'Copied!';
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }).catch(() => {
+            // Fallback
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            const toast = document.getElementById('copied-toast');
+            toast.textContent = toastMsg || 'Copied!';
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        });
+    }
+
+    // ============================================================
+    // UI EVENT LISTENERS
+    // ============================================================
+    function initUIListeners() {
+        // Tutorial start
+        document.getElementById('start-btn').addEventListener('click', () => {
+            hideTutorial();
+        });
+
+        // Top bar buttons
+        document.getElementById('undo-btn').addEventListener('click', undoMove);
+        document.getElementById('restart-btn').addEventListener('click', restartGame);
+        document.getElementById('help-btn').addEventListener('click', () => {
+            const tutorial = document.getElementById('tutorial');
+            tutorial.classList.remove('hidden');
+            document.querySelectorAll('.instruction-item').forEach(item => {
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-30px)';
+            });
+            document.getElementById('start-btn').style.opacity = '0';
+            document.querySelector('.tutorial-title').style.opacity = '0';
+            document.querySelector('.tutorial-subtitle').style.opacity = '0';
+            setTimeout(animateTutorial, 100);
+        });
+
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            document.getElementById('settings-panel').classList.toggle('visible');
+            AudioSystem.play('click');
+        });
+
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            if (document.fullscreenElement) document.exitFullscreen();
+            else document.documentElement.requestFullscreen();
+        });
+
+        // Promotion pieces
+        document.querySelectorAll('.promotion-piece').forEach(piece => {
+            piece.addEventListener('click', function() {
+                if (promotionPending) {
+                    hidePromotionModal();
+                    makeMove(promotionPending.from, promotionPending.to, this.dataset.piece);
+                }
+            });
+        });
+
+        // Win screen buttons
+        document.getElementById('play-again-btn').addEventListener('click', () => {
+            hideWinScreen();
+            if (Multiplayer.isMultiplayer) {
+                Multiplayer.leaveRoom();
+                showLobby();
+                resetGameState();
+            } else {
+                restartGame();
+            }
+        });
+
+        document.getElementById('close-win-btn').addEventListener('click', () => {
+            hideWinScreen();
+            if (Multiplayer.isMultiplayer) {
+                Multiplayer.leaveRoom();
+                showLobby();
+                resetGameState();
+            }
+        });
+
+        // Close settings on outside click
+        document.addEventListener('click', (e) => {
+            const settings = document.getElementById('settings-panel');
+            const settingsBtn = document.getElementById('settings-btn');
+            if (!settings.contains(e.target) && !settingsBtn.contains(e.target)) {
+                settings.classList.remove('visible');
+            }
+        });
+
+        // ---- LOBBY BUTTONS ----
+        document.getElementById('btn-create-room').addEventListener('click', () => {
+            Multiplayer.connect(() => {
+                Multiplayer.createRoom();
+            });
+        });
+
+        document.getElementById('btn-join-room').addEventListener('click', () => {
+            const code = document.getElementById('room-code-input').value.trim();
+            if (code.length < 4) {
+                showLobbyError('Enter a valid room code');
+                return;
+            }
+            Multiplayer.connect(() => {
+                Multiplayer.joinRoom(code);
+            });
+        });
+
+        document.getElementById('room-code-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('btn-join-room').click();
+            }
+        });
+
+        document.getElementById('btn-local-play').addEventListener('click', () => {
+            Multiplayer.isMultiplayer = false;
+            hideLobby();
+        });
+
+        // ---- WAITING MODAL BUTTONS ----
+        document.getElementById('waiting-room-code').addEventListener('click', () => {
+            const code = document.getElementById('waiting-room-code').textContent;
+            copyToClipboard(code, 'Room code copied!');
+        });
+
+        document.getElementById('btn-copy-code').addEventListener('click', () => {
+            const code = document.getElementById('waiting-room-code').textContent;
+            copyToClipboard(code, 'Room code copied!');
+        });
+
+        document.getElementById('btn-copy-invite-link').addEventListener('click', () => {
+            const link = document.getElementById('invite-link-text').textContent;
+            copyToClipboard(link, 'Invite link copied!');
+        });
+
+        document.getElementById('btn-copy-link').addEventListener('click', () => {
+            const link = document.getElementById('invite-link-text').textContent;
+            copyToClipboard(link, 'Invite link copied!');
+        });
+
+        document.getElementById('btn-share-link').addEventListener('click', () => {
+            const code = Multiplayer.roomCode;
+            const link = document.getElementById('invite-link-text').textContent;
+            if (navigator.share) {
+                navigator.share({
+                    title: '3D Chess Premium',
+                    text: `Join me for a game of chess! Room code: ${code}`,
+                    url: link,
+                }).catch(() => {});
+            } else {
+                copyToClipboard(link, 'Invite link copied!');
+            }
+        });
+
+        // Cancel room
+        document.getElementById('btn-cancel-room').addEventListener('click', () => {
+            Multiplayer.leaveRoom();
+            hideAllMpModals();
+        });
+
+        // ---- DISCONNECT MODAL ----
+        document.getElementById('btn-leave-room').addEventListener('click', () => {
+            Multiplayer.leaveRoom();
+            hideAllMpModals();
+            showLobby();
+            resetGameState();
+        });
+
+        // ---- ROOM CLOSED MODAL ----
+        document.getElementById('btn-back-to-lobby').addEventListener('click', () => {
+            hideAllMpModals();
+            showLobby();
+            resetGameState();
+        });
+
+        // ---- NOT FOUND MODAL ----
+        document.getElementById('btn-not-found-create').addEventListener('click', () => {
+            hideNotFoundModal();
+            setRoomInUrl(null);
+            Multiplayer.connect(() => {
+                Multiplayer.createRoom();
+            });
+        });
+
+        document.getElementById('btn-not-found-back').addEventListener('click', () => {
+            hideNotFoundModal();
+            setRoomInUrl(null);
+            showLobby();
+        });
+
+        // ---- ROOM FULL MODAL ----
+        document.getElementById('btn-room-full-create').addEventListener('click', () => {
+            hideRoomFullModal();
+            setRoomInUrl(null);
+            Multiplayer.connect(() => {
+                Multiplayer.createRoom();
+            });
+        });
+
+        document.getElementById('btn-room-full-back').addEventListener('click', () => {
+            hideRoomFullModal();
+            setRoomInUrl(null);
+            showLobby();
+        });
+
+        // ---- BROWSER BACK/FORWARD ----
+        window.addEventListener('popstate', () => {
+            const roomCode = getRoomCodeFromUrl();
+            if (roomCode && !Multiplayer.isMultiplayer) {
+                Multiplayer.connect(() => {
+                    Multiplayer.joinRoom(roomCode, { fromUrl: true });
+                });
+            }
+        });
+    }
+
+    /**
+     * Reset the chess game to initial state
+     */
+    function resetGameState() {
+        chess = new Chess();
+        moveHistory = [];
+        capturedWhite = [];
+        capturedBlack = [];
+        selectedPiece = null;
+        boardRotation = 0;
+
+        boardGroup.rotation.y = 0;
+        piecesGroup.rotation.y = 0;
+        highlightsGroup.rotation.y = 0;
+
+        updateAllPieces();
+        clearHighlights();
+        updateUI();
+        updateMpStatus(false);
+    }
+
+    // ============================================================
+    // INITIALIZATION
+    // ============================================================
+    function init() {
+        AudioSystem.init();
+        initThree();
+        createBoard();
+        createAllPieces();
+        createAmbientParticles();
+        initSettings();
+        initKeyboardShortcuts();
+        initUIListeners();
+        updateUI();
+        highlightLastMove();
+        animateTutorial();
+        animate();
+
+        // Check for ?room= parameter — auto-join if present
+        const urlRoomCode = getRoomCodeFromUrl();
+        if (urlRoomCode) {
+            console.log('[AutoJoin] Detected room code from URL:', urlRoomCode);
+            // Skip tutorial, connect and join
+            document.getElementById('tutorial').classList.add('hidden');
+            Multiplayer.connect(() => {
+                Multiplayer.joinRoom(urlRoomCode, { fromUrl: true });
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+    </script>
+</body>
+</html>
