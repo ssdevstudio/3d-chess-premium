@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a0f">
     <title>3D Chess Premium</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -25,6 +29,10 @@
             --success: #22c55e;
             --danger: #ef4444;
             --warning: #f59e0b;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
         }
 
         body {
@@ -32,6 +40,12 @@
             overflow: hidden;
             background: #0a0a0f;
             color: white;
+            overscroll-behavior: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
         }
 
         #canvas-container {
@@ -302,14 +316,17 @@
            ============================================================ */
         #top-bar {
             position: fixed;
-            top: 20px;
+            top: calc(15px + var(--safe-top));
             left: 50%;
             transform: translateX(-50%);
             z-index: 100;
-            padding: 12px 24px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
-            gap: 24px;
+            gap: 20px;
+            max-width: calc(100vw - 2 * var(--safe-left) - 2 * var(--safe-right));
+            flex-wrap: nowrap;
+            overflow: hidden;
         }
 
         .turn-indicator {
@@ -363,6 +380,7 @@
         .top-btn {
             width: 40px;
             height: 40px;
+            min-width: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -373,11 +391,27 @@
             cursor: pointer;
             font-size: 1.1rem;
             transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+            flex-shrink: 0;
         }
 
         .top-btn:hover {
             background: rgba(255, 255, 255, 0.2);
             transform: translateY(-2px);
+        }
+
+        .top-btn:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .top-btn.danger-btn {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .top-btn.danger-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
         }
 
         /* ============================================================
@@ -436,13 +470,14 @@
            ============================================================ */
         #side-panel {
             position: fixed;
-            right: 20px;
-            top: 80px;
+            right: calc(15px + var(--safe-right));
+            top: calc(75px + var(--safe-top));
             width: 280px;
             z-index: 100;
-            padding: 20px;
-            max-height: calc(100vh - 100px);
+            padding: 18px;
+            max-height: calc(100vh - 100px - var(--safe-top) - var(--safe-bottom));
             overflow-y: auto;
+            transition: transform 0.3s ease, opacity 0.3s ease;
         }
 
         #side-panel::-webkit-scrollbar {
@@ -539,14 +574,18 @@
            ============================================================ */
         #bottom-status {
             position: fixed;
-            bottom: 20px;
+            bottom: calc(15px + var(--safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             z-index: 100;
-            padding: 12px 30px;
+            padding: 10px 28px;
             font-size: 1rem;
             font-weight: 500;
             text-align: center;
+            max-width: calc(100vw - 30px - var(--safe-left) - var(--safe-right));
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* ============================================================
@@ -554,15 +593,17 @@
            ============================================================ */
         #settings-panel {
             position: fixed;
-            left: 20px;
-            top: 80px;
+            left: calc(15px + var(--safe-left));
+            top: calc(75px + var(--safe-top));
             width: 260px;
             z-index: 100;
-            padding: 20px;
+            padding: 18px;
             opacity: 0;
             visibility: hidden;
             transform: translateX(-20px);
             transition: all 0.3s ease;
+            max-height: calc(100vh - 100px - var(--safe-top) - var(--safe-bottom));
+            overflow-y: auto;
         }
 
         #settings-panel.visible {
@@ -1021,54 +1062,205 @@
         }
 
         /* ============================================================
-           RESPONSIVE
+           RESPONSIVE — Mobile & Tablet
            ============================================================ */
         @media (max-width: 768px) {
+            /* Top bar: compact, scrollable, safe area */
             #top-bar {
-                padding: 8px 16px;
-                gap: 12px;
-                width: calc(100% - 40px);
-                flex-wrap: wrap;
-                justify-content: center;
+                padding: 6px 10px;
+                gap: 8px;
+                top: calc(10px + var(--safe-top));
+                max-width: calc(100vw - 20px);
+                overflow-x: auto;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            #top-bar::-webkit-scrollbar { display: none; }
+
+            .turn-indicator { gap: 6px; font-size: 0.85rem; }
+            .turn-dot { width: 10px; height: 10px; }
+            .status-badge { padding: 4px 12px; font-size: 0.72rem; }
+
+            .top-btn {
+                width: 36px;
+                height: 36px;
+                min-width: 36px;
+                font-size: 1rem;
+                border-radius: 8px;
             }
 
+            .mp-status { font-size: 0.7rem; padding: 4px 10px; gap: 6px; }
+            .your-color { font-size: 0.65rem; padding: 3px 7px; }
+
+            /* Side panel: bottom drawer on mobile */
             #side-panel {
-                display: none;
+                right: 10px;
+                left: 10px;
+                top: auto;
+                bottom: calc(55px + var(--safe-bottom));
+                width: auto;
+                max-height: 35vh;
+                padding: 12px;
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(30px);
             }
 
+            #side-panel.mobile-visible {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+            }
+
+            .move-history { max-height: 100px; }
+
+            /* Settings panel: full width on mobile */
             #settings-panel {
                 left: 10px;
                 right: 10px;
+                top: calc(60px + var(--safe-top));
                 width: auto;
+                max-height: calc(100vh - 80px - var(--safe-top));
             }
 
-            .tutorial-title, .lobby-title {
-                font-size: 2rem;
-            }
+            /* Tutorial & lobby */
+            .tutorial-title, .lobby-title { font-size: 1.8rem; }
+            .lobby-subtitle { font-size: 0.95rem; margin-bottom: 2rem; }
 
             .instruction-item {
-                min-width: 280px;
-                padding: 0.8rem 1.2rem;
+                min-width: auto;
+                max-width: 90vw;
+                padding: 0.6rem 1rem;
+            }
+            .instruction-text { font-size: 0.9rem; }
+            .instruction-icon { width: 35px; height: 35px; font-size: 1rem; }
+
+            #start-btn { padding: 1rem 3rem; font-size: 1.1rem; }
+
+            /* Bottom status */
+            #bottom-status {
+                width: auto;
+                max-width: calc(100vw - 30px);
+                font-size: 0.82rem;
+                padding: 8px 18px;
+                bottom: calc(12px + var(--safe-bottom));
             }
 
-            #bottom-status {
-                width: calc(100% - 40px);
-                font-size: 0.9rem;
+            /* Modals */
+            .modal-content {
+                min-width: auto;
+                width: calc(100vw - 30px);
+                max-width: 400px;
+                padding: 25px 20px;
             }
 
             .room-code-display {
-                font-size: 2rem;
-                letter-spacing: 6px;
+                font-size: 1.8rem;
+                letter-spacing: 5px;
+                padding: 12px 20px;
             }
 
-            .modal-content {
-                min-width: auto;
-                width: calc(100% - 40px);
+            .join-group { flex-direction: column; gap: 0.6rem; }
+            .room-code-input { width: 100%; max-width: 200px; }
+            .lobby-btn { min-width: 200px; padding: 0.85rem 2rem; font-size: 1rem; }
+
+            /* Promotion */
+            .promotion-piece { width: 56px; height: 56px; font-size: 2rem; }
+
+            /* Win screen */
+            .win-title { font-size: 2.5rem; }
+            .win-subtitle { font-size: 1.2rem; }
+            .win-content { padding: 25px; }
+            .win-btn { padding: 12px 24px; font-size: 0.9rem; }
+
+            /* Invite actions */
+            .invite-actions { gap: 8px; }
+            .invite-btn { padding: 8px 14px; font-size: 0.78rem; }
+
+            .invite-link-box { padding: 6px 10px; }
+            .invite-link-text { font-size: 0.72rem; }
+
+            /* Mobile panel toggle */
+            #mobile-panel-toggle {
+                display: flex !important;
             }
 
-            .join-group {
-                flex-direction: column;
+            #mobile-settings-toggle {
+                display: flex !important;
             }
+        }
+
+        /* Landscape mobile */
+        @media (max-width: 926px) and (orientation: landscape) and (max-height: 500px) {
+            #top-bar {
+                top: calc(5px + var(--safe-top));
+                padding: 4px 8px;
+                gap: 6px;
+            }
+            .top-btn { width: 32px; height: 32px; min-width: 32px; font-size: 0.9rem; }
+            .turn-indicator { font-size: 0.78rem; }
+            .status-badge { padding: 3px 10px; font-size: 0.68rem; }
+
+            #bottom-status {
+                bottom: calc(5px + var(--safe-bottom));
+                font-size: 0.75rem;
+                padding: 6px 14px;
+            }
+
+            #side-panel {
+                bottom: calc(40px + var(--safe-bottom));
+                max-height: 30vh;
+            }
+
+            .modal-content { padding: 18px 15px; }
+            .room-code-display { font-size: 1.5rem; letter-spacing: 4px; padding: 10px 16px; }
+
+            .lobby-title, .tutorial-title { font-size: 1.5rem; }
+            .lobby-subtitle, .tutorial-subtitle { font-size: 0.85rem; margin-bottom: 1rem; }
+            .instructions-container { max-height: 35vh; gap: 0.4rem; }
+            .instruction-item { padding: 0.5rem 0.8rem; }
+            #start-btn { padding: 0.8rem 2.5rem; font-size: 1rem; }
+        }
+
+        /* Tablet */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            #top-bar { gap: 16px; padding: 10px 18px; }
+            #side-panel { width: 240px; padding: 15px; }
+            #settings-panel { width: 230px; }
+        }
+
+        /* Mobile panel toggle buttons (hidden on desktop) */
+        #mobile-panel-toggle, #mobile-settings-toggle {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            width: 42px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 1.2rem;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #mobile-panel-toggle {
+            right: calc(12px + var(--safe-right));
+            bottom: calc(12px + var(--safe-bottom));
+        }
+
+        #mobile-settings-toggle {
+            left: calc(12px + var(--safe-left));
+            bottom: calc(12px + var(--safe-bottom));
+        }
+
+        #mobile-panel-toggle:active, #mobile-settings-toggle:active {
+            transform: scale(0.9);
         }
 
         .piece-label {
@@ -1078,6 +1270,187 @@
             text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
             z-index: 10;
             transition: all 0.3s ease;
+        }
+
+        /* ============================================================
+           ANIMATIONS — Smooth transitions
+           ============================================================ */
+        @keyframes modal-fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes modal-scale-in {
+            from { opacity: 0; transform: scale(0.85) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        @keyframes modal-pop-in {
+            from { opacity: 0; transform: scale(0.7); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes success-pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px 10px rgba(34, 197, 94, 0.3); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+
+        .modal-overlay {
+            animation: modal-fade-in 0.25s ease;
+        }
+
+        .modal-content {
+            animation: modal-scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .modal-overlay.success .modal-content {
+            animation: modal-pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), success-pulse 0.8s ease 0.35s;
+        }
+
+        .modal-overlay.closing {
+            animation: modal-fade-out 0.25s ease forwards;
+        }
+
+        @keyframes modal-fade-out {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        /* Opponent joined success flash */
+        .success-flash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 950;
+            padding: 20px 40px;
+            border-radius: 16px;
+            background: rgba(34, 197, 94, 0.9);
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .success-flash.show {
+            animation: success-flash-anim 1.5s ease;
+        }
+
+        @keyframes success-flash-anim {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            40% { transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* Invite popup special styling */
+        #waiting-modal .modal-content {
+            background: rgba(20, 20, 40, 0.85);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.2);
+        }
+
+        .qr-download {
+            margin-top: 10px;
+        }
+
+        /* Loading overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        #loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .loading-logo {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1.5rem;
+            animation: pulse-logo 2s ease infinite;
+        }
+
+        @keyframes pulse-logo {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .loading-text {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 1rem;
+        }
+
+        /* Exit confirm buttons */
+        .exit-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .exit-btn {
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .exit-btn.danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .exit-btn.safe {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .exit-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Opponent left modal */
+        #opponent-left-modal .modal-content {
+            background: rgba(30, 15, 25, 0.9);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Room expired */
+        #room-expired-modal .modal-content {
+            background: rgba(30, 20, 15, 0.9);
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
     </style>
 </head>
@@ -1162,7 +1535,12 @@
         <button class="top-btn" id="help-btn" title="Help (H)">❓</button>
         <button class="top-btn" id="settings-btn" title="Settings">⚙️</button>
         <button class="top-btn" id="fullscreen-btn" title="Fullscreen (F)">⛶</button>
+        <button class="top-btn danger-btn" id="exit-btn" title="Exit Game">🚪</button>
     </div>
+
+    <!-- Mobile panel toggles (visible on mobile only) -->
+    <button id="mobile-panel-toggle" title="Stats">📊</button>
+    <button id="mobile-settings-toggle" title="Settings">⚙️</button>
 
     <!-- Side Panel -->
     <div id="side-panel" class="glass">
@@ -1262,10 +1640,14 @@
                 <button class="invite-link-copy" id="btn-copy-invite-link">Copy</button>
             </div>
             <div class="qr-container" id="qr-container"></div>
+            <div class="invite-actions qr-download">
+                <button class="invite-btn" id="btn-download-qr">⬇️ Download QR</button>
+                <button class="invite-btn" id="btn-copy-qr">📋 Copy QR</button>
+            </div>
             <div class="invite-actions">
-                <button class="invite-btn primary" id="btn-copy-code">Copy Code</button>
-                <button class="invite-btn" id="btn-copy-link">Copy Link</button>
-                <button class="invite-btn" id="btn-share-link">Share</button>
+                <button class="invite-btn primary" id="btn-copy-code">📋 Copy Code</button>
+                <button class="invite-btn" id="btn-copy-link">🔗 Copy Link</button>
+                <button class="invite-btn" id="btn-share-link">📤 Share</button>
             </div>
             <button class="modal-btn danger" id="btn-cancel-room">Cancel</button>
         </div>
@@ -1324,6 +1706,55 @@
             <div class="modal-title">Room Closed</div>
             <div class="modal-text" id="room-closed-text">The room has been closed.</div>
             <button class="modal-btn" id="btn-back-to-lobby">Back to Lobby</button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden">
+        <div class="loading-logo">3D Chess Premium</div>
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Connecting...</div>
+    </div>
+
+    <!-- Success Flash -->
+    <div class="success-flash" id="success-flash">Opponent Joined!</div>
+
+    <!-- Exit Game Confirmation -->
+    <div class="modal-overlay" id="exit-confirm-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">🚪</div>
+            <div class="modal-title">Leave Game?</div>
+            <div class="modal-text">Are you sure you want to leave this match? Your opponent will be notified.</div>
+            <div class="exit-buttons">
+                <button class="exit-btn danger" id="btn-exit-yes">Yes, Leave</button>
+                <button class="exit-btn safe" id="btn-exit-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Opponent Left -->
+    <div class="modal-overlay" id="opponent-left-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">👋</div>
+            <div class="modal-title">Opponent Left</div>
+            <div class="modal-text" id="opponent-left-text">Your opponent has left the match.</div>
+            <div class="modal-actions">
+                <button class="modal-btn primary" id="btn-wait-reconnect">Wait for Reconnect</button>
+                <button class="modal-btn danger" id="btn-opponent-left-home">Return Home</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Expired -->
+    <div class="modal-overlay" id="room-expired-modal">
+        <div class="modal-content glass">
+            <div class="modal-icon">⏰</div>
+            <div class="modal-title">Room Expired</div>
+            <div class="modal-text" id="room-expired-text">This room no longer exists.</div>
+            <div class="modal-actions">
+                <button class="modal-btn primary" id="btn-expired-create">Create New Room</button>
+                <button class="modal-btn danger" id="btn-expired-home">Go Home</button>
+            </div>
         </div>
     </div>
 
@@ -1512,6 +1943,15 @@
         controls.minPolarAngle = Math.PI / 6;
         controls.autoRotate = CONFIG.autoRotate;
         controls.autoRotateSpeed = 0.5;
+        // Touch: single finger rotate, two fingers zoom
+        controls.touches = {
+            ONE: THREE.OrbitControls.TOUCH.ROTATE,
+            TWO: THREE.OrbitControls.TOUCH.DOLLY_PAN
+        };
+        controls.enablePan = false;
+        // Limit zoom and rotation speed for mobile
+        controls.rotateSpeed = 0.6;
+        controls.zoomSpeed = 0.8;
 
         ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambientLight);
@@ -1565,6 +2005,15 @@
         window.addEventListener('resize', onWindowResize);
         renderer.domElement.addEventListener('click', onCanvasClick);
         renderer.domElement.addEventListener('contextmenu', onCanvasRightClick);
+        // Touch handling
+        renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: true });
+        renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: true });
+        renderer.domElement.addEventListener('touchend', onTouchEnd, { passive: true });
+        // Prevent pinch-zoom and scroll gestures on the canvas
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) e.preventDefault();
+        }, { passive: false });
+        renderer.domElement.addEventListener('gesturestart', (e) => e.preventDefault());
     }
 
     function onWindowResize() {
@@ -2466,14 +2915,12 @@
     }
 
     // ============================================================
-    // EVENT HANDLERS
+    // EVENT HANDLERS — Mouse + Touch unified
     // ============================================================
-    function onCanvasClick(event) {
-        if (isAnimating) return;
-
+    function getSquareFromClientXY(clientX, clientY) {
         const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
         const intersects = raycaster.intersectObjects(boardSquares);
@@ -2482,9 +2929,57 @@
             const square = intersects[0].object.userData;
             const file = String.fromCharCode(97 + square.col);
             const rank = 8 - square.row;
-            const algebraic = file + rank;
-            
-            handleSquareClick(algebraic);
+            return file + rank;
+        }
+        return null;
+    }
+
+    // Track touch to distinguish tap vs drag
+    let touchStartTime = 0;
+    let touchMoved = false;
+    let touchStartPos = { x: 0, y: 0 };
+    let lastTouchCount = 0;
+
+    function onCanvasClick(event) {
+        if (isAnimating) return;
+        const algebraic = getSquareFromClientXY(event.clientX, event.clientY);
+        if (algebraic) handleSquareClick(algebraic);
+    }
+
+    function onTouchStart(event) {
+        touchMoved = false;
+        touchStartTime = Date.now();
+        lastTouchCount = event.touches.length;
+        if (event.touches.length > 0) {
+            touchStartPos = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+        }
+    }
+
+    function onTouchMove(event) {
+        const dx = event.touches.length > 0 ? Math.abs(event.touches[0].clientX - touchStartPos.x) : 0;
+        const dy = event.touches.length > 0 ? Math.abs(event.touches[0].clientY - touchStartPos.y) : 0;
+        if (dx > 12 || dy > 12) touchMoved = true;
+    }
+
+    function onTouchEnd(event) {
+        // Only treat as tap if:
+        //  - single finger
+        //  - didn't move much
+        //  - short duration
+        const elapsed = Date.now() - touchStartTime;
+        if (lastTouchCount === 1 && !touchMoved && elapsed < 400) {
+            if (isAnimating) return;
+            // Use the touch end position (changedTouches has final position)
+            let clientX, clientY;
+            if (event.changedTouches && event.changedTouches.length > 0) {
+                clientX = event.changedTouches[0].clientX;
+                clientY = event.changedTouches[0].clientY;
+            } else {
+                clientX = touchStartPos.x;
+                clientY = touchStartPos.y;
+            }
+            const algebraic = getSquareFromClientXY(clientX, clientY);
+            if (algebraic) handleSquareClick(algebraic);
         }
     }
 
@@ -2736,32 +3231,73 @@
     }
 
     /**
-     * Generate a QR code using a simple canvas-based generator
+     * Generate a QR code using the QR server API
+     * Returns the generated Image object (for download)
      */
     function generateQR(text, container, size) {
-        size = size || 120;
+        size = size || 140;
         container.innerHTML = '';
+        container.style.display = 'flex';
+        container.style.justifyContent = 'center';
 
-        // Use a lightweight QR API (no dependencies)
-        const canvas = document.createElement('canvas');
-        const qrSize = size;
-        canvas.width = qrSize;
-        canvas.height = qrSize;
-        const ctx = canvas.getContext('2d');
-
-        // Use the free QR server API as an image
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=1a1a2e&margin=8`;
+        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=1a1a2e&margin=8&format=png`;
         img.style.borderRadius = '8px';
         img.style.background = 'white';
-        img.style.padding = '4px';
+        img.style.padding = '6px';
+        img.style.maxWidth = '100%';
         img.alt = 'QR Code';
+        img.id = 'qr-image';
         img.onerror = () => {
-            // Silently fail if QR service unavailable
             img.style.display = 'none';
         };
         container.appendChild(img);
+        return img;
+    }
+
+    /**
+     * Download the QR code as PNG
+     */
+    function downloadQR(text) {
+        const img = document.getElementById('qr-image');
+        if (!img || !img.src) {
+            copyToClipboard(text, 'Invite link copied!');
+            return;
+        }
+        // Create a composite canvas with white background for reliable download
+        const canvas = document.createElement('canvas');
+        canvas.width = 300;
+        canvas.height = 300;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, 300, 300);
+
+        const drawAndDownload = () => {
+            try {
+                ctx.drawImage(img, 10, 10, 280, 280);
+                const url = canvas.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `chess-room-${Multiplayer.roomCode}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showToast('QR code downloaded');
+            } catch (e) {
+                // CORS may block canvas — fallback to copy link
+                copyToClipboard(text, 'Invite link copied!');
+            }
+        };
+
+        if (img.complete && img.naturalWidth > 0) {
+            drawAndDownload();
+        } else if (img.complete && img.naturalWidth === 0) {
+            copyToClipboard(text, 'Invite link copied!');
+        } else {
+            img.onload = drawAndDownload;
+            img.onerror = () => copyToClipboard(text, 'Invite link copied!');
+        }
     }
 
     /**
@@ -2783,6 +3319,8 @@
             return;
         }
 
+        showLoading('Connecting...');
+
         try {
             this.socket = io(this.serverUrl, {
                 reconnection: true,
@@ -2794,6 +3332,7 @@
             });
         } catch (err) {
             console.error('[Network] Connection failed:', err);
+            hideLoading();
             showLobbyError('Cannot connect to server');
             return;
         }
@@ -2801,6 +3340,7 @@
         // Connection timeout — if not connected within 20s, show error
         const connectTimer = setTimeout(() => {
             if (!this.isConnected) {
+                hideLoading();
                 showLobbyError('Server unreachable. Retrying...');
             }
         }, 20000);
@@ -2809,6 +3349,7 @@
             clearTimeout(connectTimer);
             console.log('[Network] Connected:', this.socket.id);
             this.isConnected = true;
+            hideLoading();
             updateMpStatus(true);
             if (onConnected) {
                 onConnected();
@@ -2816,10 +3357,12 @@
             }
         });
 
-        this.socket.on('disconnect', () => {
-            console.log('[Network] Disconnected');
+        this.socket.on('disconnect', (reason) => {
+            console.log('[Network] Disconnected:', reason);
             this.isConnected = false;
             updateMpStatus(false);
+            // If we intentionally left (io client disconnect), don't auto-reconnect
+            if (reason === 'io client disconnect') return;
         });
 
         this.socket.on('connect_error', (err) => {
@@ -2872,17 +3415,41 @@
             this.applyFullState(state);
         });
 
-        // Opponent disconnected
+        // Opponent disconnected (network/crash — wait for reconnect)
         this.socket.on('playerDisconnected', (data) => {
             console.log('[Network] Opponent disconnected');
             showDisconnectModal(data.message);
+        });
+
+        // Opponent intentionally left — close immediately
+        this.socket.on('opponentLeft', (data) => {
+            console.log('[Network] Opponent left');
+            hideAllMpModals();
+            showOpponentLeftModal(data.message || 'Opponent left the match.', data.canReconnect);
         });
 
         // Opponent reconnected
         this.socket.on('playerReconnected', (data) => {
             console.log('[Network] Opponent reconnected');
             hideDisconnectModal();
+            showSuccessFlash('Opponent Reconnected!');
             this.requestSync();
+        });
+
+        // Server confirmed our intentional leave — clean up and go home
+        this.socket.on('leftRoom', (data) => {
+            console.log('[Network] Left room confirmed');
+            this.reset();
+            hideAllMpModals();
+            showLobby();
+            resetGameState();
+        });
+
+        // Game starting (opponent joined)
+        this.socket.on('playerJoined', (data) => {
+            console.log('[Network] Player joined:', data);
+            hideWaitingModal();
+            showSuccessFlash('Opponent Joined!');
         });
 
         // Game over
@@ -2903,7 +3470,12 @@
         this.socket.on('roomClosed', (data) => {
             console.log('[Network] Room closed:', data.reason);
             hideAllMpModals();
-            showRoomClosedModal(data.reason);
+            // If we were viewing via URL (auto-join), show expired modal
+            if (getRoomCodeFromUrl()) {
+                showRoomExpiredModal(data.reason || 'This room has been closed.');
+            } else {
+                showRoomClosedModal(data.reason);
+            }
             setRoomInUrl(null);
             this.reset();
         });
@@ -2980,11 +3552,11 @@
                 if (options.fromUrl) {
                     // Show appropriate error modal
                     if (response.error === 'Room not found') {
-                        showNotFoundModal(response.error);
+                        showRoomExpiredModal('This room does not exist or has expired.');
                     } else if (response.error === 'Room is full' || response.error === 'Game is already over') {
                         showRoomFullModal(response.error);
                     } else {
-                        showNotFoundModal(response.error);
+                        showRoomExpiredModal(response.error);
                     }
                 } else {
                     showLobbyError(response.error || 'Failed to join room');
@@ -3077,19 +3649,72 @@
         this.movePending = false;
         localStorage.removeItem('chess_room');
         hideDisconnectModal();
+        hideOpponentLeftModal();
         updateMpStatus(false);
     };
 
     /**
-     * Leave the current room
+     * Leave the current room — notify server (intentional exit)
      */
     Multiplayer.leaveRoom = function() {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.socket.connect();
+        if (this.socket && this.isConnected) {
+            this.socket.emit('leaveRoom', {}, () => {});
         }
-        setRoomInUrl(null);
         this.reset();
+    };
+
+    /**
+     * Full cleanup and return to home screen
+     */
+    Multiplayer.goHome = function() {
+        // Stop all timers and intervals
+        if (disconnectTimerInterval) {
+            clearInterval(disconnectTimerInterval);
+            disconnectTimerInterval = null;
+        }
+        if (window._bgInterval) {
+            clearInterval(window._bgInterval);
+            window._bgInterval = null;
+        }
+
+        // Notify server
+        if (this.socket && this.isConnected) {
+            try {
+                this.socket.emit('leaveRoom', {}, () => {});
+            } catch (e) {}
+            // Fully disconnect socket — removes all listeners
+            this.socket.removeAllListeners();
+            this.socket.disconnect();
+            this.socket = null;
+        }
+        this.isConnected = false;
+
+        // Reset game state
+        resetGameState();
+        this.reset();
+
+        // Reset board rotation / camera
+        boardRotation = 0;
+        if (boardGroup) {
+            boardGroup.rotation.y = 0;
+            piecesGroup.rotation.y = 0;
+            highlightsGroup.rotation.y = 0;
+        }
+        resetCamera();
+
+        // Clear selection and highlights
+        selectedPiece = null;
+        clearHighlights();
+        isAnimating = false;
+        promotionPending = null;
+        hidePromotionModal();
+        hideWinScreen();
+
+        // Clear URL and show lobby
+        setRoomInUrl(null);
+        hideAllMpModals();
+        showLobby();
+        updateUI();
     };
 
     // ============================================================
@@ -3181,13 +3806,65 @@
         document.getElementById('room-closed-modal').classList.add('visible');
     }
 
+    function showOpponentLeftModal(message, canReconnect) {
+        document.getElementById('opponent-left-text').textContent = message || 'Your opponent has left the match.';
+        // Intentional leave (canReconnect false / undefined) = no reconnect possible
+        const waitBtn = document.getElementById('btn-wait-reconnect');
+        if (waitBtn) {
+            waitBtn.style.display = (canReconnect === true) ? '' : 'none';
+        }
+        document.getElementById('opponent-left-modal').classList.add('visible');
+    }
+
+    function hideOpponentLeftModal() {
+        document.getElementById('opponent-left-modal').classList.remove('visible');
+    }
+
+    function showRoomExpiredModal(message) {
+        document.getElementById('room-expired-text').textContent = message || 'This room no longer exists.';
+        document.getElementById('room-expired-modal').classList.add('visible');
+    }
+
+    function showLoading(text) {
+        const overlay = document.getElementById('loading-overlay');
+        if (text) document.getElementById('loading-text').textContent = text;
+        overlay.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('copied-toast');
+        toast.textContent = msg || 'Copied!';
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    function showSuccessFlash(text) {
+        const flash = document.getElementById('success-flash');
+        flash.textContent = text || 'Success!';
+        flash.classList.remove('show');
+        // Force reflow to restart animation
+        void flash.offsetWidth;
+        flash.classList.add('show');
+    }
+
     function hideAllMpModals() {
         hideWaitingModal();
         hideDisconnectModal();
         hideJoiningModal();
         hideNotFoundModal();
         hideRoomFullModal();
+        hideOpponentLeftModal();
         document.getElementById('room-closed-modal').classList.remove('visible');
+        document.getElementById('room-expired-modal').classList.remove('visible');
+        hideExitConfirmModal();
+    }
+
+    function hideExitConfirmModal() {
+        document.getElementById('exit-confirm-modal').classList.remove('visible');
     }
 
     function updateMpStatus(connected) {
@@ -3363,18 +4040,86 @@
             if (navigator.share) {
                 navigator.share({
                     title: '3D Chess Premium',
-                    text: `Join me for a game of chess! Room code: ${code}`,
+                    text: 'Join my chess game!',
                     url: link,
                 }).catch(() => {});
             } else {
-                copyToClipboard(link, 'Invite link copied!');
+                copyToClipboard(link, 'Invite link copied.');
             }
+        });
+
+        // QR download / copy
+        document.getElementById('btn-download-qr').addEventListener('click', () => {
+            const link = document.getElementById('invite-link-text').textContent;
+            downloadQR(link);
+        });
+
+        document.getElementById('btn-copy-qr').addEventListener('click', () => {
+            const link = document.getElementById('invite-link-text').textContent;
+            copyToClipboard(link, 'Invite link copied.');
         });
 
         // Cancel room
         document.getElementById('btn-cancel-room').addEventListener('click', () => {
             Multiplayer.leaveRoom();
             hideAllMpModals();
+            showLobby();
+            resetGameState();
+        });
+
+        // ---- EXIT BUTTON ----
+        document.getElementById('exit-btn').addEventListener('click', () => {
+            if (!Multiplayer.isMultiplayer) {
+                // Single player — just go home
+                Multiplayer.goHome();
+                return;
+            }
+            document.getElementById('exit-confirm-modal').classList.add('visible');
+        });
+
+        document.getElementById('btn-exit-yes').addEventListener('click', () => {
+            document.getElementById('exit-confirm-modal').classList.remove('visible');
+            Multiplayer.goHome();
+        });
+
+        document.getElementById('btn-exit-cancel').addEventListener('click', () => {
+            document.getElementById('exit-confirm-modal').classList.remove('visible');
+        });
+
+        // ---- OPPONENT LEFT MODAL ----
+        document.getElementById('btn-wait-reconnect').addEventListener('click', () => {
+            hideOpponentLeftModal();
+            // The room is still alive on server (opponent may reconnect)
+            // Just wait — keep socket connected
+            showToast('Waiting for opponent...');
+        });
+
+        document.getElementById('btn-opponent-left-home').addEventListener('click', () => {
+            Multiplayer.goHome();
+        });
+
+        // ---- ROOM EXPIRED MODAL ----
+        document.getElementById('btn-expired-create').addEventListener('click', () => {
+            document.getElementById('room-expired-modal').classList.remove('visible');
+            setRoomInUrl(null);
+            Multiplayer.connect(() => {
+                Multiplayer.createRoom();
+            });
+        });
+
+        document.getElementById('btn-expired-home').addEventListener('click', () => {
+            document.getElementById('room-expired-modal').classList.remove('visible');
+            setRoomInUrl(null);
+            showLobby();
+        });
+
+        // ---- MOBILE PANEL TOGGLES ----
+        document.getElementById('mobile-panel-toggle').addEventListener('click', () => {
+            document.getElementById('side-panel').classList.toggle('mobile-visible');
+        });
+
+        document.getElementById('mobile-settings-toggle').addEventListener('click', () => {
+            document.getElementById('settings-panel').classList.toggle('visible');
         });
 
         // ---- DISCONNECT MODAL ----
@@ -3471,6 +4216,9 @@
         animateTutorial();
         animate();
 
+        // Hide loading overlay by default (shown only during connect/auto-join)
+        hideLoading();
+
         // Check for ?room= parameter or stored room — auto-join/reconnect
         const urlRoomCode = getRoomCodeFromUrl();
         const stored = localStorage.getItem('chess_room');
@@ -3496,6 +4244,7 @@
                             Multiplayer.gameStarted = true;
                             setRoomInUrl(response.code);
                             hideLobby();
+                            hideLoading();
                             Multiplayer.requestSync();
                         } else {
                             // Reconnect failed, try fresh join

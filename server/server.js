@@ -180,6 +180,22 @@ const RoomManager = {
     },
 
     /**
+     * Delete a room WITHOUT notifying players (used for intentional leave,
+     * where the opponent is already notified via 'opponentLeft').
+     */
+    silentRemove(code) {
+        const room = this.rooms.get(code);
+        if (!room) return;
+
+        if (room.disconnected.timeout) {
+            clearTimeout(room.disconnected.timeout);
+        }
+
+        this.rooms.delete(code);
+        log('room', `Removed (intentional leave): ${code}`);
+    },
+
+    /**
      * Get the opponent's socket ID for a given socket
      */
     getOpponent(code, socketId) {
@@ -609,6 +625,61 @@ io.on('connection', (socket) => {
         }
 
         callback({ success: true, state: RoomManager.buildState(room) });
+    });
+
+    // --------------------------------------------------------
+    // LEAVE ROOM (intentional exit — close room immediately)
+    // --------------------------------------------------------
+    socket.on('leaveRoom', (data, callback) => {
+        if (typeof callback !== 'function') callback = () => {};
+
+        if (!currentRoom) {
+            if (callback) callback({ success: false, error: 'Not in a room' });
+            return;
+        }
+
+        const room = RoomManager.get(currentRoom);
+        if (!room) {
+            currentRoom = null;
+            if (callback) callback({ success: false, error: 'Room not found' });
+            return;
+        }
+
+        const roomCode = currentRoom;
+        const color = RoomManager.getColor(roomCode, socket.id);
+
+        // Notify opponent that player LEFT (not disconnected)
+        const opponentId = RoomManager.getOpponent(roomCode, socket.id);
+        if (opponentId) {
+            io.to(opponentId).emit('opponentLeft', {
+                color,
+                message: 'Opponent left the match.',
+                canReconnect: false,
+            });
+        }
+
+        // Cancel any pending disconnect timeout
+        if (room.disconnected.timeout) {
+            clearTimeout(room.disconnected.timeout);
+        }
+
+        // Remove the player from the room
+        if (color === 'w') {
+            room.players.white = null;
+        } else if (color === 'b') {
+            room.players.black = null;
+        }
+
+        socket.leave(roomCode);
+
+        log('leave', `${roomCode} → ${color === 'w' ? 'White' : 'Black'} left intentionally`);
+
+        // Remove the room immediately (no reconnect timeout for intentional exit).
+        // Opponent is notified via 'opponentLeft' above — do NOT emit 'roomClosed'.
+        RoomManager.silentRemove(roomCode);
+
+        if (callback) callback({ success: true });
+        currentRoom = null;
     });
 
     // --------------------------------------------------------
