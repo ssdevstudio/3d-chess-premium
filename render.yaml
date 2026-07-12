@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: 3d-chess-premium
+    runtime: node
+    rootDir: server
+    repo: https://github.com/ssdevstudio/3d-chess-premium
+    branch: main
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: HOST
+        value: https://3d-chess-premium.onrender.com
