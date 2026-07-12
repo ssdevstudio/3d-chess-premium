@@ -1943,11 +1943,22 @@
         controls.minPolarAngle = Math.PI / 6;
         controls.autoRotate = CONFIG.autoRotate;
         controls.autoRotateSpeed = 0.5;
-        // Touch: single finger rotate, two fingers zoom
-        controls.touches = {
-            ONE: THREE.OrbitControls.TOUCH.ROTATE,
-            TWO: THREE.OrbitControls.TOUCH.DOLLY_PAN
-        };
+        // Touch: single finger rotate, two fingers zoom/pan.
+        // Detect the OrbitControls touch API dynamically — some builds
+        // expose THREE.TOUCH, others don't. When unsupported, skip the
+        // custom mapping and keep OrbitControls' default touch behavior.
+        if (
+            controls.touches !== undefined &&
+            typeof THREE !== 'undefined' &&
+            THREE.TOUCH &&
+            THREE.TOUCH.ROTATE !== undefined &&
+            THREE.TOUCH.DOLLY_PAN !== undefined
+        ) {
+            controls.touches = {
+                ONE: THREE.TOUCH.ROTATE,
+                TWO: THREE.TOUCH.DOLLY_PAN
+            };
+        }
         controls.enablePan = false;
         // Limit zoom and rotation speed for mobile
         controls.rotateSpeed = 0.6;
