@@ -1065,6 +1065,66 @@
            RESPONSIVE — Mobile & Tablet
            ============================================================ */
         @media (max-width: 768px) {
+            /* ---- Dedicated mobile layout ----
+               Board region on top, stats panel below it (in normal flow,
+               no overlay). No horizontal scrolling. */
+            #canvas-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 60vh;
+            }
+
+            /* Side panel becomes a static region BELOW the board */
+            #side-panel {
+                right: 0;
+                left: 0;
+                top: 60vh;
+                bottom: 0;
+                width: auto;
+                max-height: none;
+                opacity: 1;
+                visibility: visible;
+                transform: none;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                padding: 10px 12px calc(10px + var(--safe-bottom));
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
+            }
+
+            /* Captured pieces collapse into a compact horizontal row */
+            .panel-section { margin-bottom: 0; }
+            .panel-title { font-size: 0.72rem; margin-bottom: 4px; opacity: 0.7; }
+            .captured-pieces {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 2px;
+                min-height: 22px;
+                max-height: 46px;
+                overflow-y: auto;
+            }
+            .captured-piece { width: 26px; height: 26px; font-size: 1.3rem; }
+
+            /* Move history collapses to a short scrollable box */
+            .move-history {
+                max-height: 16vh;
+                font-size: 0.72rem;
+            }
+
+            /* Bottom status floats just under the top bar so it never
+               overlaps the board or the stats panel */
+            #bottom-status {
+                top: calc(52px + var(--safe-top));
+                bottom: auto;
+                left: 50%;
+                transform: translateX(-50%);
+                max-width: calc(100vw - 20px);
+            }
+
             /* Top bar: compact, scrollable, safe area */
             #top-bar {
                 padding: 6px 10px;
@@ -1092,26 +1152,6 @@
             .mp-status { font-size: 0.7rem; padding: 4px 10px; gap: 6px; }
             .your-color { font-size: 0.65rem; padding: 3px 7px; }
 
-            /* Side panel: bottom drawer on mobile */
-            #side-panel {
-                right: 10px;
-                left: 10px;
-                top: auto;
-                bottom: calc(55px + var(--safe-bottom));
-                width: auto;
-                max-height: 35vh;
-                padding: 12px;
-                opacity: 0;
-                visibility: hidden;
-                transform: translateY(30px);
-            }
-
-            #side-panel.mobile-visible {
-                opacity: 1;
-                visibility: visible;
-                transform: translateY(0);
-            }
-
             .move-history { max-height: 100px; }
 
             /* Settings panel: full width on mobile */
@@ -1137,13 +1177,13 @@
 
             #start-btn { padding: 1rem 3rem; font-size: 1.1rem; }
 
-            /* Bottom status */
+            /* Bottom status — keep compact (positioned under top bar via the
+               rule near the top of this media block) */
             #bottom-status {
                 width: auto;
                 max-width: calc(100vw - 30px);
                 font-size: 0.82rem;
                 padding: 8px 18px;
-                bottom: calc(12px + var(--safe-bottom));
             }
 
             /* Modals */
@@ -1180,37 +1220,63 @@
             .invite-link-box { padding: 6px 10px; }
             .invite-link-text { font-size: 0.72rem; }
 
-            /* Mobile panel toggle */
+            /* Settings toggle stays (opens settings drawer); panel toggle is
+               hidden because the stats panel is always shown below the board. */
             #mobile-panel-toggle {
-                display: flex !important;
+                display: none !important;
             }
 
             #mobile-settings-toggle {
                 display: flex !important;
+                bottom: calc(12px + var(--safe-bottom));
+                right: 12px;
             }
         }
 
-        /* Landscape mobile */
+        /* Landscape mobile — board on the left, stats panel on the right */
         @media (max-width: 926px) and (orientation: landscape) and (max-height: 500px) {
+            #canvas-container {
+                width: 58vw;
+                height: 100vh;
+            }
+
             #top-bar {
                 top: calc(5px + var(--safe-top));
                 padding: 4px 8px;
                 gap: 6px;
+                max-width: calc(58vw - 10px);
             }
             .top-btn { width: 32px; height: 32px; min-width: 32px; font-size: 0.9rem; }
             .turn-indicator { font-size: 0.78rem; }
             .status-badge { padding: 3px 10px; font-size: 0.68rem; }
 
             #bottom-status {
-                bottom: calc(5px + var(--safe-bottom));
-                font-size: 0.75rem;
-                padding: 6px 14px;
+                top: calc(40px + var(--safe-top));
+                bottom: auto;
+                left: auto;
+                right: calc(58vw + 10px);
+                transform: none;
+                font-size: 0.72rem;
+                padding: 6px 12px;
             }
 
             #side-panel {
-                bottom: calc(40px + var(--safe-bottom));
-                max-height: 30vh;
+                top: 0;
+                bottom: 0;
+                left: 58vw;
+                right: 0;
+                width: auto;
+                max-height: none;
+                opacity: 1;
+                visibility: visible;
+                transform: none;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                padding: 8px 10px calc(8px + var(--safe-bottom));
+                overflow-y: auto;
             }
+            .move-history { max-height: 22vh; }
 
             .modal-content { padding: 18px 15px; }
             .room-code-display { font-size: 1.5rem; letter-spacing: 4px; padding: 10px 16px; }
@@ -1916,17 +1982,18 @@
     // ============================================================
     function initThree() {
         const container = document.getElementById('canvas-container');
-        
+        const initSize = getCanvasSize();
+
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0a0a0f);
         scene.fog = new THREE.Fog(0x0a0a0f, 15, 25);
 
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera = new THREE.PerspectiveCamera(45, initSize.w / initSize.h, 0.1, 100);
         camera.position.set(0, 8, 8);
         camera.lookAt(0, 0, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(initSize.w, initSize.h);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -1943,20 +2010,21 @@
         controls.minPolarAngle = Math.PI / 6;
         controls.autoRotate = CONFIG.autoRotate;
         controls.autoRotateSpeed = 0.5;
-        // Touch: single finger rotate, two fingers zoom/pan.
-        // Detect the OrbitControls touch API dynamically — some builds
-        // expose THREE.TOUCH, others don't. When unsupported, skip the
-        // custom mapping and keep OrbitControls' default touch behavior.
+        // Touch mapping (mobile):
+        //  - ONE finger  -> chess interaction only (handled manually); the
+        //    camera must NOT rotate, so selecting a piece never spins the board.
+        //  - TWO fingers -> camera: pinch to zoom + rotate.
+        // Detect the OrbitControls touch API dynamically. On builds that do
+        // not expose THREE.TOUCH, skip the mapping and keep default behavior.
         if (
             controls.touches !== undefined &&
             typeof THREE !== 'undefined' &&
             THREE.TOUCH &&
-            THREE.TOUCH.ROTATE !== undefined &&
-            THREE.TOUCH.DOLLY_PAN !== undefined
+            THREE.TOUCH.DOLLY_ROTATE !== undefined
         ) {
             controls.touches = {
-                ONE: THREE.TOUCH.ROTATE,
-                TWO: THREE.TOUCH.DOLLY_PAN
+                ONE: null,
+                TWO: THREE.TOUCH.DOLLY_ROTATE
             };
         }
         controls.enablePan = false;
@@ -2027,10 +2095,24 @@
         renderer.domElement.addEventListener('gesturestart', (e) => e.preventDefault());
     }
 
+    /**
+     * Return the size the renderer/camera should use. On desktop the canvas
+     * container fills the viewport; on mobile (dedicated layout) it is a
+     * constrained region so the board sits above the stats panel. Always fall
+     * back to the window size if the container has no measured dimensions yet.
+     */
+    function getCanvasSize() {
+        const el = document.getElementById('canvas-container');
+        const w = (el && el.clientWidth) ? el.clientWidth : window.innerWidth;
+        const h = (el && el.clientHeight) ? el.clientHeight : window.innerHeight;
+        return { w: w, h: h };
+    }
+
     function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        const size = getCanvasSize();
+        camera.aspect = size.w / size.h;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(size.w, size.h);
     }
 
     // ============================================================
@@ -3242,6 +3324,53 @@
     }
 
     /**
+     * How long (ms) a stored multiplayer session may be used to auto-reconnect.
+     * Rooms are ephemeral on the server, so anything older than this is almost
+     * certainly dead — we clear it instead of trying to reconnect forever.
+     */
+    const RECONNECT_MAX_AGE = 2 * 60 * 1000; // 2 minutes
+
+    /**
+     * Read the persisted room from localStorage, but only if it is still
+     * considered "fresh" (within RECONNECT_MAX_AGE). Stale/invalid entries are
+     * removed and null is returned, so a fresh homepage visit never tries to
+     * auto-reconnect from dead storage.
+     */
+    function readStoredRoom() {
+        try {
+            const raw = localStorage.getItem('chess_room');
+            if (!raw) return null;
+            const obj = JSON.parse(raw);
+            if (!obj || typeof obj.code !== 'string') {
+                localStorage.removeItem('chess_room');
+                return null;
+            }
+            const age = Date.now() - (obj.ts || 0);
+            if (age > RECONNECT_MAX_AGE) {
+                localStorage.removeItem('chess_room');
+                return null;
+            }
+            return obj;
+        } catch (e) {
+            try { localStorage.removeItem('chess_room'); } catch (_) {}
+            return null;
+        }
+    }
+
+    /**
+     * Persist the current multiplayer room with a timestamp for reconnect.
+     */
+    function storeRoom(code, color) {
+        try {
+            localStorage.setItem('chess_room', JSON.stringify({
+                code: code,
+                color: color,
+                ts: Date.now(),
+            }));
+        } catch (e) { /* ignore */ }
+    }
+
+    /**
      * Generate a QR code using the QR server API
      * Returns the generated Image object (for download)
      */
@@ -3319,6 +3448,18 @@
         if (this.socket && this.isConnected) {
             if (onConnected) onConnected();
             return;
+        }
+
+        // If a socket exists but is no longer connected (e.g. a past session
+        // left it disconnected), dispose it and open a fresh connection so a
+        // subsequent join/create never silently no-ops.
+        if (this.socket && !this.isConnected) {
+            try {
+                this.socket.removeAllListeners();
+                this.socket.disconnect();
+            } catch (e) { /* ignore */ }
+            this.socket = null;
+            this.isConnected = false;
         }
 
         this.serverUrl = this.serverUrl || detectServerUrl();
@@ -3451,6 +3592,7 @@
         this.socket.on('leftRoom', (data) => {
             console.log('[Network] Left room confirmed');
             this.reset();
+            setRoomInUrl(null);
             hideAllMpModals();
             showLobby();
             resetGameState();
@@ -3509,10 +3651,7 @@
                 this.inviteLink = response.inviteLink;
 
                 // Persist for refresh recovery
-                localStorage.setItem('chess_room', JSON.stringify({
-                    code: response.code,
-                    color: response.color,
-                }));
+                storeRoom(response.code, response.color);
 
                 setRoomInUrl(response.code);
                 showWaitingModal(response.code, response.inviteLink);
@@ -3549,10 +3688,7 @@
                 this.inviteLink = response.inviteLink;
 
                 // Persist for refresh recovery
-                localStorage.setItem('chess_room', JSON.stringify({
-                    code: response.code,
-                    color: response.color,
-                }));
+                storeRoom(response.code, response.color);
 
                 setRoomInUrl(response.code);
                 hideLobby();
@@ -4230,22 +4366,28 @@
         // Hide loading overlay by default (shown only during connect/auto-join)
         hideLoading();
 
-        // Check for ?room= parameter or stored room — auto-join/reconnect
+        // Check for ?room= (explicit invite) or a FRESH stored room (refresh
+        // recovery). Stale storage is cleared by readStoredRoom() so a fresh
+        // homepage visit never auto-reconnects from a dead session.
         const urlRoomCode = getRoomCodeFromUrl();
-        const stored = localStorage.getItem('chess_room');
-        const roomToJoin = urlRoomCode || (stored ? JSON.parse(stored).code : null);
+        const stored = readStoredRoom();
+        // Room Expired is shown ONLY for an explicit ?room= link, never on a
+        // plain homepage visit.
+        const isExplicitLink = !!urlRoomCode;
+        const roomToJoin = urlRoomCode || (stored ? stored.code : null);
 
         if (roomToJoin) {
-            console.log('[AutoJoin] Detected room code:', roomToJoin);
+            console.log('[AutoJoin] Detected room code:', roomToJoin, '(explicit:', isExplicitLink, ')');
             document.getElementById('tutorial').classList.add('hidden');
 
             Multiplayer.connect(() => {
-                // Try reconnect first (for refresh recovery)
-                if (stored) {
-                    const saved = JSON.parse(stored);
+                if (stored && !urlRoomCode) {
+                    // Refresh recovery: reconnect to the SAME color slot. If it
+                    // fails (room gone), just clear storage and return to lobby
+                    // — do NOT show Room Expired on a fresh homepage visit.
                     Multiplayer.socket.emit('reconnectToRoom', {
-                        code: saved.code,
-                        asColor: saved.color,
+                        code: stored.code,
+                        asColor: stored.color,
                     }, (response) => {
                         if (response.success) {
                             console.log('[AutoJoin] Reconnected as', response.color);
@@ -4258,13 +4400,16 @@
                             hideLoading();
                             Multiplayer.requestSync();
                         } else {
-                            // Reconnect failed, try fresh join
-                            console.log('[AutoJoin] Reconnect failed, trying join:', response.error);
-                            Multiplayer.joinRoom(roomToJoin, { fromUrl: true });
+                            console.log('[AutoJoin] Reconnect failed (stale):', response.error);
+                            localStorage.removeItem('chess_room');
+                            setRoomInUrl(null);
+                            hideLoading();
+                            showLobby();
                         }
                     });
                 } else {
-                    Multiplayer.joinRoom(roomToJoin, { fromUrl: true });
+                    // Explicit invite link: join and surface Room Expired on failure.
+                    Multiplayer.joinRoom(roomToJoin, { fromUrl: isExplicitLink });
                 }
             });
         }
