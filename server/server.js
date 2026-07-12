@@ -569,7 +569,8 @@ io.on('connection', (socket) => {
         };
 
         callback({ success: true, gameState });
-        io.to(room.code).emit('moveAccepted', gameState);
+        // Emit only to opponent — sender already applied move locally
+        socket.to(room.code).emit('moveAccepted', gameState);
 
         // Game over?
         if (room.chess.in_checkmate() || room.chess.in_stalemate() || room.chess.in_draw()) {
@@ -624,6 +625,12 @@ io.on('connection', (socket) => {
         const color = RoomManager.getColor(currentRoom, socket.id);
         if (!color) { currentRoom = null; return; }
 
+        // Capture room code for timeout closures BEFORE clearing currentRoom
+        const roomCode = currentRoom;
+
+        // Get opponent BEFORE clearing the slot
+        const opponentId = RoomManager.getOpponent(roomCode, socket.id);
+
         // Release the player slot but keep the color assignment for reconnect
         if (color === 'w') {
             room.players.white = null;
@@ -631,10 +638,9 @@ io.on('connection', (socket) => {
             room.players.black = null;
         }
 
-        RoomManager.touch(currentRoom);
+        RoomManager.touch(roomCode);
 
         // Notify opponent
-        const opponentId = RoomManager.getOpponent(currentRoom, socket.id);
         if (opponentId) {
             io.to(opponentId).emit('playerDisconnected', {
                 color,
@@ -645,20 +651,20 @@ io.on('connection', (socket) => {
             room.disconnected = {
                 color,
                 timeout: setTimeout(() => {
-                    log('timeout', `${currentRoom} → ${color} timed out`);
-                    RoomManager.destroy(currentRoom);
+                    log('timeout', `${roomCode} → ${color} timed out`);
+                    RoomManager.destroy(roomCode);
                 }, CONFIG.reconnectTimeout),
             };
         } else {
             // No opponent connected — destroy if game not in progress
             if (!room.gameOver && room.moveHistory.length === 0) {
-                RoomManager.destroy(currentRoom);
+                RoomManager.destroy(roomCode);
             } else {
                 // Keep alive for reconnect
                 room.disconnected = {
                     color,
                     timeout: setTimeout(() => {
-                        RoomManager.destroy(currentRoom);
+                        RoomManager.destroy(roomCode);
                     }, CONFIG.reconnectTimeout),
                 };
             }

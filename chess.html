@@ -1390,6 +1390,7 @@
         gameStarted: false,
         serverUrl: null,
         inviteLink: null,
+        movePending: false,   // True while waiting for server move confirmation
 
         get isMyTurn() {
             if (!this.isMultiplayer) return chess.turn() === 'w';
@@ -1398,7 +1399,7 @@
 
         get canInteract() {
             if (!this.isMultiplayer) return true;
-            return this.isMyTurn && !isAnimating && this.gameStarted;
+            return this.isMyTurn && !isAnimating && this.gameStarted && !this.movePending;
         }
     };
 
@@ -2156,14 +2157,10 @@
                 updateUI();
                 highlightLastMove();
 
-                if (isCheckmate) {
-                    AudioSystem.play('victory');
-                    setTimeout(() => showWinScreen(), 500);
-                } else if (isCheck) {
+                // Check highlight (but NOT win/draw screen — gameOver event handles that)
+                if (isCheck) {
                     AudioSystem.play('check');
                     highlightKingInCheck();
-                } else if (isStalemate || isDraw) {
-                    setTimeout(() => showDrawScreen(), 500);
                 }
             });
         } else {
@@ -2849,10 +2846,17 @@
             updateUI();
         });
 
-        // Move accepted by server
+        // Move accepted by server (opponent's move)
         this.socket.on('moveAccepted', (gameState) => {
             console.log('[Network] Move accepted:', gameState.san);
-            moveHistory.push({ san: gameState.san });
+
+            // Push full move data (not just san) for captured rebuild on sync
+            moveHistory.push({
+                san: gameState.san,
+                captured: gameState.captured || null,
+                color: gameState.moveColor,
+            });
+
             applyServerMove(gameState);
         });
 
@@ -2885,6 +2889,14 @@
         this.socket.on('gameOver', (data) => {
             console.log('[Network] Game over:', data);
             this.gameOver = true;
+
+            if (data.result === 'draw') {
+                AudioSystem.play('click');
+                setTimeout(() => showDrawScreen(), 400);
+            } else {
+                AudioSystem.play('victory');
+                setTimeout(() => showWinScreen(), 400);
+            }
         });
 
         // Room closed
@@ -2912,6 +2924,13 @@
                 this.myColor = response.color;
                 this.isMultiplayer = true;
                 this.inviteLink = response.inviteLink;
+
+                // Persist for refresh recovery
+                localStorage.setItem('chess_room', JSON.stringify({
+                    code: response.code,
+                    color: response.color,
+                }));
+
                 setRoomInUrl(response.code);
                 showWaitingModal(response.code, response.inviteLink);
                 console.log('[Network] Room created:', response.code);
@@ -2945,6 +2964,13 @@
                 this.myColor = response.color;
                 this.isMultiplayer = true;
                 this.inviteLink = response.inviteLink;
+
+                // Persist for refresh recovery
+                localStorage.setItem('chess_room', JSON.stringify({
+                    code: response.code,
+                    color: response.color,
+                }));
+
                 setRoomInUrl(response.code);
                 hideLobby();
                 hideNotFoundModal();
@@ -2972,12 +2998,23 @@
      */
     Multiplayer.sendMove = function(from, to, promotion) {
         if (!this.socket || !this.isConnected) return;
+        if (this.movePending) return; // Dedup: wait for server response
 
+        this.movePending = true;
         const payload = { from, to };
         if (promotion) payload.promotion = promotion;
 
         this.socket.emit('move', payload, (response) => {
-            if (!response.success) {
+            this.movePending = false;
+            if (response.success) {
+                // Sender applies move from server confirmation
+                moveHistory.push({
+                    san: response.gameState.san,
+                    captured: response.gameState.captured || null,
+                    color: response.gameState.moveColor,
+                });
+                applyServerMove(response.gameState);
+            } else {
                 console.warn('[Network] Move failed:', response.error);
                 this.requestSync();
             }
@@ -3037,6 +3074,8 @@
         this.gameStarted = false;
         this.gameOver = false;
         this.inviteLink = null;
+        this.movePending = false;
+        localStorage.removeItem('chess_room');
         hideDisconnectModal();
         updateMpStatus(false);
     };
@@ -3432,14 +3471,41 @@
         animateTutorial();
         animate();
 
-        // Check for ?room= parameter — auto-join if present
+        // Check for ?room= parameter or stored room — auto-join/reconnect
         const urlRoomCode = getRoomCodeFromUrl();
-        if (urlRoomCode) {
-            console.log('[AutoJoin] Detected room code from URL:', urlRoomCode);
-            // Skip tutorial, connect and join
+        const stored = localStorage.getItem('chess_room');
+        const roomToJoin = urlRoomCode || (stored ? JSON.parse(stored).code : null);
+
+        if (roomToJoin) {
+            console.log('[AutoJoin] Detected room code:', roomToJoin);
             document.getElementById('tutorial').classList.add('hidden');
+
             Multiplayer.connect(() => {
-                Multiplayer.joinRoom(urlRoomCode, { fromUrl: true });
+                // Try reconnect first (for refresh recovery)
+                if (stored) {
+                    const saved = JSON.parse(stored);
+                    Multiplayer.socket.emit('reconnectToRoom', {
+                        code: saved.code,
+                        asColor: saved.color,
+                    }, (response) => {
+                        if (response.success) {
+                            console.log('[AutoJoin] Reconnected as', response.color);
+                            Multiplayer.roomCode = response.code;
+                            Multiplayer.myColor = response.color;
+                            Multiplayer.isMultiplayer = true;
+                            Multiplayer.gameStarted = true;
+                            setRoomInUrl(response.code);
+                            hideLobby();
+                            Multiplayer.requestSync();
+                        } else {
+                            // Reconnect failed, try fresh join
+                            console.log('[AutoJoin] Reconnect failed, trying join:', response.error);
+                            Multiplayer.joinRoom(roomToJoin, { fromUrl: true });
+                        }
+                    });
+                } else {
+                    Multiplayer.joinRoom(roomToJoin, { fromUrl: true });
+                }
             });
         }
     }
