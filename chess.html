@@ -2702,12 +2702,19 @@
 
     /**
      * Detect the server URL automatically.
+     * - Localhost  → connect to localhost:3000 (same machine)
+     * - GitHub Pages / any production host → Render backend
      */
+    const RENDER_BACKEND = 'https://threed-chess-premium.onrender.com';
+
     function detectServerUrl() {
-        if (window.location.port && window.location.port !== '') {
-            return window.location.origin;
+        const host = window.location.hostname;
+        // Local development
+        if (host === 'localhost' || host === '127.0.0.1' || host === '') {
+            return 'http://localhost:3000';
         }
-        return 'http://localhost:3000';
+        // Production — always point to the Render backend
+        return RENDER_BACKEND;
     }
 
     /**
@@ -2771,13 +2778,16 @@
         }
 
         this.serverUrl = this.serverUrl || detectServerUrl();
+        console.log('[Network] Connecting to:', this.serverUrl);
 
         try {
             this.socket = io(this.serverUrl, {
                 reconnection: true,
                 reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
-                timeout: 10000,
+                reconnectionDelayMax: 5000,
+                timeout: 15000,
+                transports: ['websocket', 'polling'],
             });
         } catch (err) {
             console.error('[Network] Connection failed:', err);
@@ -2785,7 +2795,15 @@
             return;
         }
 
+        // Connection timeout — if not connected within 20s, show error
+        const connectTimer = setTimeout(() => {
+            if (!this.isConnected) {
+                showLobbyError('Server unreachable. Retrying...');
+            }
+        }, 20000);
+
         this.socket.on('connect', () => {
+            clearTimeout(connectTimer);
             console.log('[Network] Connected:', this.socket.id);
             this.isConnected = true;
             updateMpStatus(true);
@@ -2803,6 +2821,7 @@
 
         this.socket.on('connect_error', (err) => {
             console.error('[Network] Connection error:', err.message);
+            updateMpStatus(false);
         });
 
         // Room created

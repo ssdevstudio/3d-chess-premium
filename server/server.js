@@ -16,6 +16,7 @@
  * Environment Variables:
  *   PORT              - Server port (default: 3000)
  *   HOST              - Public host for invite links (default: auto-detect)
+ *   FRONTEND_URL      - Full URL of the frontend for invite links (default: auto-detect)
  *   RECONNECT_TIMEOUT - Ms to keep room alive after disconnect (default: 120000)
  *   ROOM_MAX_AGE      - Ms before empty room is cleaned (default: 7200000)
  *   ROOM_CLEANUP_INT  - Ms between cleanup sweeps (default: 30000)
@@ -36,6 +37,7 @@ const crypto = require('crypto');
 const CONFIG = {
     port: parseInt(process.env.PORT, 10) || 3000,
     host: process.env.HOST || null, // null = auto-detect from request
+    frontendUrl: process.env.FRONTEND_URL || null, // full URL of the frontend for invite links
     reconnectTimeout: parseInt(process.env.RECONNECT_TIMEOUT, 10) || 2 * 60 * 1000,
     roomMaxAge: parseInt(process.env.ROOM_MAX_AGE, 10) || 2 * 60 * 60 * 1000,
     cleanupInterval: parseInt(process.env.ROOM_CLEANUP_INT, 10) || 30 * 1000,
@@ -44,10 +46,38 @@ const CONFIG = {
 };
 
 // ============================================================
+// CORS CONFIGURATION
+// ============================================================
+const ALLOWED_ORIGINS = [
+    'https://ssdevstudio.github.io',
+    'http://localhost:3000',
+    'http://localhost:5500',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5500',
+];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.indexOf(origin) !== -1) {
+            return callback(null, true);
+        }
+        // In development, allow all origins
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+        return callback(null, true); // Allow all for now — tighten in future
+    },
+    methods: ['GET', 'POST'],
+    credentials: true,
+};
+
+// ============================================================
 // EXPRESS SETUP
 // ============================================================
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Serve the frontend from the parent directory
@@ -55,9 +85,14 @@ app.use(express.static(__dirname + '/..'));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: '*', methods: ['GET', 'POST'] },
+    cors: {
+        origin: ALLOWED_ORIGINS.concat(['*']),
+        methods: ['GET', 'POST'],
+        credentials: true,
+    },
     pingTimeout: 60000,
     pingInterval: 25000,
+    transports: ['websocket', 'polling'],
 });
 
 // ============================================================
@@ -639,6 +674,11 @@ io.on('connection', (socket) => {
  * Build a full invite link for a room
  */
 function buildInviteLink(code, request) {
+    // If FRONTEND_URL is configured, use it (invite links go to the frontend)
+    if (CONFIG.frontendUrl) {
+        return `${CONFIG.frontendUrl}?room=${code}`;
+    }
+
     // If HOST is configured, use it
     if (CONFIG.host) {
         return `${CONFIG.host}/chess.html?room=${code}`;

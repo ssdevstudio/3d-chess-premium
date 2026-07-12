@@ -11,4 +11,6 @@ services:
       - key: NODE_VERSION
         value: 18
       - key: HOST
-        value: https://3d-chess-premium.onrender.com
+        value: https://threed-chess-premium.onrender.com
+      - key: FRONTEND_URL
+        value: https://ssdevstudio.github.io/Chess-Game/chess.html
